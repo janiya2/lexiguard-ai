@@ -2,7 +2,7 @@
  * Firestore Service for LexiGuard AI
  * Uses isolated "lexiguard_*" collections to safeguard existing user demo data.
  */
-import { db } from "./firebase";
+import { db, storage } from "./firebase";
 import {
   collection,
   doc,
@@ -17,6 +17,7 @@ import {
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { LegalAuditReport } from "./aiLegalAuditor";
 import { NotarizationResult } from "./web3Service";
 
@@ -699,6 +700,21 @@ export async function getUserNotarizedContracts(walletAddress?: string | null): 
       c.id?.startsWith("demo")
     );
   });
+}
+
+// Upload file to Firebase Storage with resilient fallback
+export async function uploadContractDocument(file: File): Promise<{ url: string; fileName: string; size: number }> {
+  try {
+    const cleanFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storageRef = ref(storage, `lexiguard_uploads/${Date.now()}_${cleanFileName}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(snapshot.ref);
+    return { url, fileName: file.name, size: file.size };
+  } catch (err) {
+    console.warn("Firebase Storage upload exception, using local object URL fallback:", err);
+    const localUrl = URL.createObjectURL(file);
+    return { url: localUrl, fileName: file.name, size: file.size };
+  }
 }
 
 

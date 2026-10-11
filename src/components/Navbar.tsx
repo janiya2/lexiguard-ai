@@ -109,6 +109,13 @@ export default function Navbar() {
               <ScrollText className="w-3.5 h-3.5 text-cyan-400" />
               <span>Audit History</span>
             </Link>
+            <Link
+              href="/wallet"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-300 hover:text-cyan-300 rounded-xl hover:bg-white/5 transition-all"
+            >
+              <Wallet className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Wallet</span>
+            </Link>
           </nav>
 
           {/* Web3 Network & Wallet Section */}
