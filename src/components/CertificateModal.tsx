@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { ShieldCheck, CheckCircle2, ExternalLink, Copy, Check, Download, X } from "lucide-react";
+import { ShieldCheck, CheckCircle2, ExternalLink, Copy, Check, Download, X, Zap } from "lucide-react";
 import confetti from "canvas-confetti";
 import { NotarizationResult } from "@/lib/web3Service";
 
@@ -142,6 +142,18 @@ export default function CertificateModal({
               </span>
             </div>
           </div>
+
+          {notary.notarizedBy.includes("Relayer") && (
+            <div className="mt-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px] flex items-start gap-2.5">
+              <Zap className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-white">Demo Sandbox Simulation Hash: </span>
+                <span>
+                  This cryptographic proof was minted in 1-Click Sandbox Mode for fast testing. To broadcast an immutable transaction live onto BaseScan, connect your MetaMask wallet on Base Sepolia.
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

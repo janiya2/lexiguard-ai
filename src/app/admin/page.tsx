@@ -22,11 +22,15 @@ import {
   Percent,
   Wallet,
   ArrowUpRight,
+  UserCheck,
 } from "lucide-react";
 import {
   getSiteSettings,
   saveSiteSettings,
   getNotarizedContracts,
+  getContractorProfiles,
+  ContractorProfile,
+  DEFAULT_CONTRACTORS,
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/firestoreService";
@@ -35,11 +39,12 @@ import { useWeb3 } from "@/context/Web3Context";
 export default function AdminPage() {
   const { account } = useWeb3();
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
-  const [activeTab, setActiveTab] = useState<"cms" | "treasury" | "keys" | "docs" | "health">("cms");
+  const [activeTab, setActiveTab] = useState<"cms" | "treasury" | "contractors" | "keys" | "docs" | "health">("cms");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [contracts, setContracts] = useState<any[]>([]);
+  const [contractorsList, setContractorsList] = useState<ContractorProfile[]>(DEFAULT_CONTRACTORS);
 
   useEffect(() => {
     async function load() {
@@ -47,6 +52,8 @@ export default function AdminPage() {
       setSettings(s);
       const docs = await getNotarizedContracts();
       setContracts(docs);
+      const list = await getContractorProfiles();
+      setContractorsList(list);
     }
     load();
   }, []);
@@ -133,6 +140,18 @@ export default function AdminPage() {
           >
             <Coins className="w-3.5 h-3.5" />
             <span>Treasury & Fees (1%)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("contractors")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition-all ${
+              activeTab === "contractors"
+                ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>Contractors & Payouts ({contractorsList.length})</span>
           </button>
 
           <button
@@ -385,6 +404,77 @@ export default function AdminPage() {
               </div>
             </div>
           </form>
+        )}
+
+        {/* TAB: CONTRACTORS & PAYOUTS MANAGEMENT */}
+        {activeTab === "contractors" && (
+          <div className="space-y-6">
+            <div className="p-6 rounded-3xl bg-slate-900/60 border border-white/5 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-5">
+                <div>
+                  <h3 className="font-bold text-base text-white flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-emerald-400" />
+                    <span>Contractor Accounts, Verification & Payout Management</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Inspect registered legal tech developers, verified payout addresses, reputation trust metrics, and milestone volumes.
+                  </p>
+                </div>
+                <a
+                  href="/contractors"
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  <span>Public Directory</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              {/* Contractors Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-950/60 text-slate-400 font-semibold border-b border-white/5">
+                    <tr>
+                      <th className="py-3 px-4">Contractor</th>
+                      <th className="py-3 px-4">Role & Studio</th>
+                      <th className="py-3 px-4">Payout Address</th>
+                      <th className="py-3 px-4">Rate (ETH)</th>
+                      <th className="py-3 px-4">Trust Score</th>
+                      <th className="py-3 px-4 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {contractorsList.map((c) => (
+                      <tr key={c.walletAddress} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-white">
+                          {c.fullName}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-300">
+                          <div>{c.roleTitle}</div>
+                          <div className="text-[10px] text-slate-500">{c.companyName}</div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-cyan-300">
+                          {c.walletAddress.slice(0, 6)}...{c.walletAddress.slice(-4)}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-amber-300 font-bold">
+                          {c.hourlyRateEth} ETH
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                            {c.reputationScore}% Trust
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            Verified
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* TAB 2: API KEYS & VAULT */}

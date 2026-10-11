@@ -31,8 +31,9 @@ export default function EscrowVaultSection() {
   const [contractorsList, setContractorsList] = useState<ContractorProfile[]>(DEFAULT_CONTRACTORS);
   const [agreementId, setAgreementId] = useState("");
   const [contractorAddress, setContractorAddress] = useState(
-    "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A"
+    "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2"
   );
+  const [isAddressLocked, setIsAddressLocked] = useState(true);
   const [depositAmount, setDepositAmount] = useState("0.005");
   const [milestoneDesc, setMilestoneDesc] = useState(
     "Milestone 1: Web3 Legal Architecture & AI Audit Completion"
@@ -226,6 +227,7 @@ export default function EscrowVaultSection() {
                   onChange={(e) => {
                     if (e.target.value) {
                       setContractorAddress(e.target.value);
+                      setIsAddressLocked(true);
                     }
                   }}
                   className="w-full rounded-xl bg-slate-950 px-3 py-2 text-xs font-mono text-cyan-300 border border-white/10 focus:outline-none focus:border-cyan-500/50"
@@ -239,13 +241,40 @@ export default function EscrowVaultSection() {
                 </select>
               </div>
 
+              {/* Lock Status Header */}
+              <div className="flex items-center justify-between mb-1.5 px-1">
+                {isAddressLocked ? (
+                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span>Verified Recipient Locked</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                    <span>Manual Address (Editable)</span>
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddressLocked(!isAddressLocked)}
+                  className="text-[10px] text-slate-400 hover:text-cyan-300 underline font-semibold transition-colors"
+                >
+                  {isAddressLocked ? "Change / Unlock" : "Lock Address"}
+                </button>
+              </div>
+
               <input
                 type="text"
                 value={contractorAddress}
                 onChange={(e) => setContractorAddress(e.target.value)}
+                readOnly={isAddressLocked}
                 placeholder="0x..."
                 required
-                className="w-full rounded-xl bg-slate-950 px-3.5 py-2.5 text-xs font-mono text-slate-200 border border-white/10 focus:outline-none focus:border-cyan-500/50"
+                className={`w-full rounded-xl px-3.5 py-2.5 text-xs font-mono border transition-all ${
+                  isAddressLocked
+                    ? "bg-slate-900/90 text-cyan-300 border-emerald-500/30 cursor-not-allowed selection:bg-transparent"
+                    : "bg-slate-950 text-slate-200 border-white/10 focus:outline-none focus:border-cyan-500/50"
+                }`}
               />
             </div>
 
