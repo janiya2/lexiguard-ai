@@ -49,6 +49,7 @@ import {
   analyzeContract,
   LegalAuditReport,
   ClauseAnalysis,
+  askLegalCopilotAI,
 } from "@/lib/aiLegalAuditor";
 import { downloadAmendedContractDoc } from "@/lib/documentExporter";
 import { notarizeDocumentOnChain, NotarizationResult } from "@/lib/web3Service";
@@ -115,6 +116,8 @@ export default function AuditorPage() {
     },
   ]);
   const [userInput, setUserInput] = useState("");
+  const [isChatThinking, setIsChatThinking] = useState(false);
+  const [isFloatingChatOpen, setIsFloatingChatOpen] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -169,8 +172,10 @@ export default function AuditorPage() {
       // REJECT: Do NOT deduct credit from user!
       setInvalidDocError(
         report.invalidReason ||
-          "INVALID DOCUMENT: The uploaded text does not appear to be a legal contract, agreement, NDA, or terms of service."
+          "Non-Legal Document Detected — The uploaded text does not appear to be a valid legal contract, agreement, NDA, or terms of service."
       );
+      setAuditReport(null); // Clear previous audit report!
+      setNotarizationResult(null);
       setIsAuditing(false);
       return;
     }
@@ -200,6 +205,8 @@ export default function AuditorPage() {
     setContractTitle(file.name.replace(/\.[^/.]+$/, ""));
     setIsUploadingFile(true);
     setInvalidDocError(null);
+    setAuditReport(null); // Clear stale report when picking new file
+    setNotarizationResult(null);
 
     try {
       // 1. Upload to Firebase Storage
@@ -262,33 +269,41 @@ export default function AuditorPage() {
 
   const handleRemoveFile = () => {
     setUploadedFileMeta(null);
+    setInvalidDocError(null);
+    setAuditReport(null);
+    setNotarizationResult(null);
   };
 
-  const handleSendMessage = () => {
-    if (!userInput.trim()) return;
-    const question = userInput;
+  const handleSendMessage = async (textToSend?: string) => {
+    const question = (textToSend || userInput).trim();
+    if (!question || isChatThinking) return;
+
     setUserInput("");
-
     setChatMessages((prev) => [...prev, { sender: "user", text: question }]);
+    setIsChatThinking(true);
 
-    setTimeout(() => {
-      let reply = "Based on the contract terms, ";
-      const lower = question.toLowerCase();
-
-      if (lower.includes("terminate") || lower.includes("fire") || lower.includes("cancel")) {
-        reply += "Clause 4 permits the client to terminate immediately without notice and explicitly withholds compensation for in-progress milestones. We strongly recommend our redline requiring 14 days notice.";
-      } else if (lower.includes("liability") || lower.includes("sue") || lower.includes("indemn")) {
-        reply += "Clause 2 imposes unlimited unilateral indemnification upon the contractor. You should negotiate a liability cap tied to fees paid under the invoice.";
-      } else if (lower.includes("pay") || lower.includes("money") || lower.includes("holdback") || lower.includes("net")) {
-        reply += "Clause 3 specifies Net 90 payment terms with a punitive 30% retention escrow for 180 days. This creates severe cash flow risk.";
-      } else if (lower.includes("ip") || lower.includes("code") || lower.includes("ownership") || lower.includes("invent")) {
-        reply += "Clause 1 demands perpetual surrender of prior knowledge and existing frameworks across the universe. Our redline restricts assignment strictly to bespoke deliverables.";
-      } else {
-        reply += "LexiGuard AI flags multiple asymmetric clauses in this agreement. Review the Clause-by-Clause Redline cards on the right to download the balanced replacement terms.";
-      }
-
-      setChatMessages((prev) => [...prev, { sender: "ai", text: reply }]);
-    }, 600);
+    try {
+      const aiReply = await askLegalCopilotAI(
+        question,
+        contractText,
+        contractTitle,
+        auditReport,
+        settings.geminiApiKey,
+        chatMessages
+      );
+      setChatMessages((prev) => [...prev, { sender: "ai", text: aiReply }]);
+    } catch (err: any) {
+      console.error("Legal Copilot error:", err);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: "ai",
+          text: "I encountered a communication timeout with the AI engine. Please verify your Gemini API key or ask about key clauses like Termination, Liability, or Payment.",
+        },
+      ]);
+    } finally {
+      setIsChatThinking(false);
+    }
   };
 
   const handleCopyRedline = (clauseId: string, text: string) => {
@@ -606,6 +621,8 @@ export default function AuditorPage() {
                         setContractText(doc.fullText);
                         setUploadedFileMeta(null);
                         setInvalidDocError(null);
+                        setAuditReport(null);
+                        setNotarizationResult(null);
                       }}
                       className="px-2 py-0.5 rounded-lg bg-slate-950 border border-rose-500/20 hover:border-rose-500/40 text-rose-300 transition-colors"
                     >
@@ -619,6 +636,8 @@ export default function AuditorPage() {
                         setContractText(doc.fullText);
                         setUploadedFileMeta(null);
                         setInvalidDocError(null);
+                        setAuditReport(null);
+                        setNotarizationResult(null);
                       }}
                       className="px-2 py-0.5 rounded-lg bg-slate-950 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-300 transition-colors"
                     >
@@ -632,6 +651,8 @@ export default function AuditorPage() {
                         setContractText(doc.fullText);
                         setUploadedFileMeta(null);
                         setInvalidDocError(null);
+                        setAuditReport(null);
+                        setNotarizationResult(null);
                       }}
                       className="px-2 py-0.5 rounded-lg bg-slate-950 border border-cyan-500/20 hover:border-cyan-500/40 text-cyan-300 transition-colors"
                     >
@@ -645,6 +666,8 @@ export default function AuditorPage() {
                         setContractText(doc.fullText);
                         setUploadedFileMeta(null);
                         setInvalidDocError(null);
+                        setAuditReport(null);
+                        setNotarizationResult(null);
                       }}
                       className="px-2 py-0.5 rounded-lg bg-slate-950 border border-amber-500/20 hover:border-amber-500/40 text-amber-300 transition-colors"
                     >
@@ -781,32 +804,43 @@ export default function AuditorPage() {
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-cyan-400" />
-                    <span className="font-bold text-xs text-white">Ask Legal AI Co-Pilot</span>
+                    <span className="font-bold text-xs text-white">Ask Legal AI Counsel</span>
                   </div>
                   <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Legal Model
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {settings.geminiApiKey?.startsWith("sk-") ? "OpenAI GPT-4o" : settings.geminiApiKey ? "Gemini 1.5 Flash" : "AI Legal Engine"}
                   </span>
                 </div>
 
                 {/* Quick Prompt Starters */}
                 <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
                   <button
-                    onClick={() => setUserInput("Can the client terminate without paying for work done?")}
-                    className="px-2 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors"
+                    onClick={() => handleSendMessage("Can the client terminate without paying for work done?")}
+                    disabled={isChatThinking}
+                    className="px-2.5 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    Terminate without pay?
+                    ⚡ Terminate without pay?
                   </button>
                   <button
-                    onClick={() => setUserInput("What is my indemnification and liability cap?")}
-                    className="px-2 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors"
+                    onClick={() => handleSendMessage("What is my indemnification and liability cap?")}
+                    disabled={isChatThinking}
+                    className="px-2.5 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    Liability cap?
+                    🛡️ Liability cap risk?
                   </button>
                   <button
-                    onClick={() => setUserInput("Is Net 90 with 30% holdback customary?")}
-                    className="px-2 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors"
+                    onClick={() => handleSendMessage("Is Net 90 with 30% holdback customary?")}
+                    disabled={isChatThinking}
+                    className="px-2.5 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    Holdback terms?
+                    💰 Holdback terms?
+                  </button>
+                  <button
+                    onClick={() => handleSendMessage("Draft a polite negotiation email to request mutual liability and 14-day notice")}
+                    disabled={isChatThinking}
+                    className="px-2.5 py-1 rounded-lg bg-slate-950 border border-purple-500/30 hover:border-purple-400 text-purple-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    ✉️ Draft client email
                   </button>
                 </div>
 
@@ -814,15 +848,24 @@ export default function AuditorPage() {
                   {chatMessages.map((msg, i) => (
                     <div
                       key={i}
-                      className={`p-3 rounded-2xl max-w-[90%] leading-relaxed ${
+                      className={`p-3.5 rounded-2xl max-w-[90%] leading-relaxed whitespace-pre-wrap ${
                         msg.sender === "user"
                           ? "ml-auto bg-cyan-500/20 text-cyan-100 border border-cyan-500/30"
-                          : "mr-auto bg-slate-950/80 text-slate-300 border border-white/5"
+                          : "mr-auto bg-slate-950/80 text-slate-200 border border-white/10 shadow-lg"
                       }`}
                     >
                       {msg.text}
                     </div>
                   ))}
+
+                  {isChatThinking && (
+                    <div className="mr-auto p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 flex items-center gap-2.5 text-xs">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400 shrink-0" />
+                      <span className="animate-pulse">
+                        LexiGuard AI Counsel is thinking & cross-referencing clauses...
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-2 border-t border-white/10">
@@ -831,12 +874,13 @@ export default function AuditorPage() {
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Ask a question about this contract..."
+                    placeholder="Ask any question about this contract (English or සිංහල)..."
                     className="flex-1 rounded-xl bg-slate-950 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none border border-white/10 focus:border-cyan-400"
                   />
                   <button
-                    onClick={handleSendMessage}
-                    className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black transition-all"
+                    onClick={() => handleSendMessage()}
+                    disabled={isChatThinking}
+                    className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                   </button>
@@ -961,93 +1005,97 @@ export default function AuditorPage() {
           <div className="lg:col-span-7 space-y-6">
             {/* Top Score Overview Card with NOTARIZE ON-CHAIN button */}
             {auditReport && auditReport.isValidLegalDocument && (
-              <div className="p-6 rounded-3xl bg-slate-900/80 border border-white/10 space-y-5 shadow-2xl backdrop-blur-xl">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 border-b border-white/10 pb-5">
-                  <div>
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      Overall Compliance Rating
-                    </span>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <span
-                        className={`text-4xl sm:text-5xl font-black ${
-                          auditReport.overallScore < 50
-                            ? "text-rose-400"
-                            : auditReport.overallScore < 85
-                            ? "text-amber-400"
-                            : "text-emerald-400"
-                        }`}
-                      >
-                        {auditReport.overallScore}%
+              <div className="p-6 sm:p-7 rounded-3xl bg-slate-900/80 border border-white/10 space-y-5 shadow-2xl backdrop-blur-xl">
+                <div className="border-b border-white/10 pb-5 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    {/* Left: Overall Compliance Rating */}
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Overall Compliance Rating
                       </span>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                          auditReport.overallScore < 50
-                            ? "bg-rose-500/10 text-rose-300 border border-rose-500/30"
+                      <div className="flex items-center gap-3 mt-1">
+                        <span
+                          className={`text-4xl sm:text-5xl font-black ${
+                            auditReport.overallScore < 50
+                              ? "text-rose-400"
+                              : auditReport.overallScore < 85
+                              ? "text-amber-400"
+                              : "text-emerald-400"
+                          }`}
+                        >
+                          {auditReport.overallScore}%
+                        </span>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+                            auditReport.overallScore < 50
+                              ? "bg-rose-500/10 text-rose-300 border border-rose-500/30"
+                              : auditReport.overallScore < 85
+                              ? "bg-amber-500/10 text-amber-300 border border-amber-500/30"
+                              : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30"
+                          }`}
+                        >
+                          {auditReport.overallScore < 50
+                            ? "High Risk / Predatory"
                             : auditReport.overallScore < 85
-                            ? "bg-amber-500/10 text-amber-300 border border-amber-500/30"
-                            : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30"
-                        }`}
-                      >
-                        {auditReport.overallScore < 50
-                          ? "High Risk / Predatory"
-                          : auditReport.overallScore < 85
-                          ? "Moderate Risk"
-                          : "Fully Compliant"}
-                      </span>
+                            ? "Moderate Risk"
+                            : "Fully Compliant"}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* ACTIONS: EXPORT DOC & NOTARIZE ON-CHAIN */}
-                  <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
-                    <button
-                      onClick={() => {
-                        downloadAmendedContractDoc({
-                          title: contractTitle,
-                          originalText: contractText,
-                          clauses: auditReport.clauses,
-                          auditReport: auditReport,
-                        });
-                      }}
-                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all hover:scale-105 active:scale-95 shadow-md"
-                      title="Download clean amended contract with AI redlines as Microsoft Word Document (.DOC)"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>📄 Export Redlined (.DOC)</span>
-                    </button>
+                    {/* Right: Quick Action Buttons Group */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => {
+                          downloadAmendedContractDoc({
+                            title: contractTitle,
+                            originalText: contractText,
+                            clauses: auditReport.clauses,
+                            auditReport: auditReport,
+                          });
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm cursor-pointer"
+                        title="Download clean amended contract with AI redlines as Microsoft Word Document (.DOC)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Export Word (.DOC)</span>
+                      </button>
 
-                    <button
-                      onClick={handleNotarizeOnChain}
-                      disabled={isNotarizing || !auditReport}
-                      className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
-                    >
-                      {isNotarizing ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Notarizing to Base Sepolia...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>🛡️ Notarize On-Chain (-1 Credit)</span>
-                        </>
-                      )}
-                    </button>
+                      <button
+                        onClick={handleNotarizeOnChain}
+                        disabled={isNotarizing || !auditReport}
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-black shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                      >
+                        {isNotarizing ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Notarizing to Base Sepolia...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Notarize On-Chain (-1 Credit)</span>
+                          </>
+                        )}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuditReport(null);
-                        setContractText("");
-                        setContractTitle("");
-                        setUploadedFileMeta(null);
-                        setInvalidDocError(null);
-                      }}
-                      className="flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-2xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/10 transition-all hover:scale-105 active:scale-95"
-                      title="Clear current audit and start a fresh document"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>New Audit</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuditReport(null);
+                          setContractText("");
+                          setContractTitle("");
+                          setUploadedFileMeta(null);
+                          setInvalidDocError(null);
+                          setNotarizationResult(null);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold bg-slate-800/90 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/10 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                        title="Clear current audit and start a fresh document"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>New Audit</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1209,6 +1257,50 @@ export default function AuditorPage() {
             {/* If NO audit report yet: Render Comprehensive Introduction & How It Works Guide */}
             {(!auditReport || !auditReport.isValidLegalDocument) && (
               <div className="space-y-6 animate-in fade-in">
+                {/* Dedicated Action Card when an invalid non-legal document is detected */}
+                {invalidDocError && (
+                  <div className="p-6 sm:p-7 rounded-3xl bg-rose-500/10 border border-rose-500/30 text-center space-y-4 shadow-2xl backdrop-blur-xl animate-in fade-in">
+                    <div className="w-14 h-14 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto shadow-lg shadow-rose-500/20">
+                      <ShieldAlert className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1.5 max-w-md mx-auto">
+                      <h3 className="text-lg font-black text-white">Non-Legal Document Detected — Audit Aborted</h3>
+                      <p className="text-xs text-rose-300 leading-relaxed">
+                        {invalidDocError}
+                      </p>
+                      <p className="text-[11px] text-emerald-400 font-semibold pt-1 flex items-center justify-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>0 Credits Deducted — Your audit quota was not charged.</span>
+                      </p>
+                    </div>
+                    <div className="pt-1 flex flex-wrap items-center justify-center gap-2.5">
+                      <button
+                        onClick={() => {
+                          const doc = TEN_TEST_LEGAL_CONTRACTS[0];
+                          setContractTitle(doc.title);
+                          setContractText(doc.fullText);
+                          setUploadedFileMeta(null);
+                          setInvalidDocError(null);
+                          setAuditReport(null);
+                          setNotarizationResult(null);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                      >
+                        ⚡ Load Test Legal Contract
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInvalidDocError(null);
+                          setContractText("");
+                          setUploadedFileMeta(null);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-all border border-white/10 cursor-pointer"
+                      >
+                        Clear Input
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* 1. How It Works Hero Card */}
                 <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 border border-white/10 space-y-6 shadow-2xl backdrop-blur-xl">
                   <div className="space-y-2">
@@ -1501,6 +1593,118 @@ export default function AuditorPage() {
         isOpen={isConnectModalOpen}
         onClose={() => setIsConnectModalOpen(false)}
       />
+
+      {/* FLOATING AI LEGAL COUNSEL COPILOT WIDGET */}
+      {isFloatingChatOpen ? (
+        <div className="fixed bottom-6 right-6 z-50 w-[420px] max-w-[95vw] h-[580px] max-h-[85vh] rounded-3xl bg-[#090d1a]/95 border border-cyan-500/40 shadow-[0_0_50px_rgba(6,182,212,0.35)] flex flex-col overflow-hidden backdrop-blur-2xl animate-in fade-in slide-in-from-bottom-5 duration-200">
+          {/* Copilot Header */}
+          <div className="p-4 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/60 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-sm shadow-cyan-500/20">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-black text-xs text-white">LexiCopilot AI Counsel</span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Live
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 truncate max-w-[220px]">
+                  Context: {contractTitle || "Custom Legal Agreement"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsFloatingChatOpen(false)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Quick Prompts */}
+          <div className="p-2.5 bg-slate-950/80 border-b border-white/5 flex items-center gap-1.5 overflow-x-auto text-[10px] no-scrollbar">
+            <button
+              onClick={() => handleSendMessage("Can the client terminate without paying for work done?")}
+              disabled={isChatThinking}
+              className="px-2.5 py-1 rounded-lg bg-slate-900 border border-white/10 hover:border-cyan-400 text-slate-300 hover:text-white shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              ⚡ Terminate without pay?
+            </button>
+            <button
+              onClick={() => handleSendMessage("What is my indemnification and liability cap?")}
+              disabled={isChatThinking}
+              className="px-2.5 py-1 rounded-lg bg-slate-900 border border-white/10 hover:border-cyan-400 text-slate-300 hover:text-white shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              🛡️ Liability cap risk?
+            </button>
+            <button
+              onClick={() => handleSendMessage("Draft a polite negotiation email to request mutual liability and 14-day notice")}
+              disabled={isChatThinking}
+              className="px-2.5 py-1 rounded-lg bg-slate-900 border border-purple-500/30 hover:border-purple-400 text-purple-300 hover:text-white shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              ✉️ Draft email
+            </button>
+          </div>
+
+          {/* Messages Box */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
+            {chatMessages.map((msg, i) => (
+              <div
+                key={i}
+                className={`p-3.5 rounded-2xl max-w-[90%] leading-relaxed whitespace-pre-wrap ${
+                  msg.sender === "user"
+                    ? "ml-auto bg-cyan-500/20 text-cyan-100 border border-cyan-500/30"
+                    : "mr-auto bg-slate-900/90 text-slate-200 border border-white/10 shadow-md"
+                }`}
+              >
+                {msg.text}
+              </div>
+            ))}
+            {isChatThinking && (
+              <div className="mr-auto p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 flex items-center gap-2 text-xs">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400 shrink-0" />
+                <span className="animate-pulse">Thinking with AI Counsel...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Input Form */}
+          <div className="p-3 bg-slate-950 border-t border-white/10 flex items-center gap-2">
+            <input
+              type="text"
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+              placeholder="Ask anything about this contract (English or සිංහල)..."
+              className="flex-1 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none border border-white/10 focus:border-cyan-400"
+            />
+            <button
+              onClick={() => handleSendMessage()}
+              disabled={isChatThinking}
+              className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsFloatingChatOpen(true)}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold text-xs shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all hover:scale-105 active:scale-95 border border-cyan-400/40 cursor-pointer"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+          </span>
+          <MessageSquare className="w-4 h-4" />
+          <span>Ask Legal AI Copilot</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-black/40 border border-white/10 font-mono text-cyan-300">
+            {settings.geminiApiKey?.startsWith("sk-") ? "GPT-4o" : settings.geminiApiKey ? "Gemini 1.5" : "Active AI"}
+          </span>
+        </button>
+      )}
     </div>
   );
 }
