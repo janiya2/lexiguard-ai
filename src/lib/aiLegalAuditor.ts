@@ -80,7 +80,7 @@ export async function analyzeContract(
   content: string,
   customApiKey?: string
 ): Promise<LegalAuditReport> {
-  const activeKey = customApiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+  const activeKey = (customApiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "").trim();
 
   // 1. Check with OpenAI if key starts with "sk-"
   if (activeKey.startsWith("sk-")) {
@@ -188,8 +188,8 @@ Return JSON:
     }
   }
 
-  // 2. Check with Google Gemini (1.5 Flash / Pro) if key starts with "AIzaSy"
-  if (activeKey.startsWith("AIzaSy")) {
+  // 2. Check with Google Gemini (1.5 Flash / Pro)
+  if (activeKey && !activeKey.startsWith("sk-") && activeKey.length > 15) {
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`,
@@ -513,45 +513,219 @@ ${content}`
   };
 }
 
+// ============================================================================
+// MULTIMODAL MEDIA & VISION OCR EXTRACTOR
+// ============================================================================
+
+export interface MediaExtractionResult {
+  text: string;
+  isLegalDoc: boolean;
+  invalidReason?: string;
+  isImageOrPdf: boolean;
+}
+
 /**
- * Interactive AI Legal Counsel / Copilot Chat Agent
- * Connects directly to Google Gemini 1.5 Flash (or OpenAI GPT-4o) with active contract context.
- * Falls back to high-fidelity contextual legal heuristics when offline or without API key.
+ * Optical Character Recognition & Multimodal Document Extractor
+ * Verifies document authenticity and extracts contract text using Google Gemini 1.5 Flash Vision.
+ * If the image/document is non-legal (e.g. photos, 3D room renders, artwork), flags it and prevents fake content generation.
  */
+export async function extractContractTextFromMedia(
+  file: File,
+  base64Data: string,
+  mimeType: string,
+  customApiKey?: string
+): Promise<MediaExtractionResult> {
+  const activeKey = (customApiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "").trim();
+
+  // 1. Google Gemini 1.5 Flash Vision (supports image/* and application/pdf via inlineData)
+  if (activeKey && !activeKey.startsWith("sk-") && activeKey.length > 15) {
+    try {
+      const isImg = mimeType.startsWith("image/");
+      const isPdf = mimeType === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const cleanMime = isImg ? (mimeType || "image/png") : isPdf ? "application/pdf" : "image/png";
+
+      const prompt = `You are LexiGuard AI's Optical Character Recognition (OCR) and Legal Document Verifier for the Blockchain Legal Institute (BLI).
+Inspect this uploaded ${isImg ? "image" : "document"} carefully.
+
+STEP 1: Verify whether this is an authentic legal agreement, contract, NDA, terms of service, invoice, or formal legal document.
+CRITICAL MANDATE:
+- If this image depicts an executive boardroom, office interior, 3D architectural render, landscape, portrait, person, logo, artwork, meme, or non-legal photograph:
+  You MUST set "isValidLegalDocument": false and describe what it actually depicts.
+  DO NOT INVENT, FABRICATE, OR HALLUCINATE ANY CONTRACT TEXT!
+- If this is a real legal contract or contains contractual clauses:
+  Extract and transcribe the text verbatim.
+
+STEP 2: Return STRICT JSON:
+{
+  "isValidLegalDocument": boolean,
+  "reason": "If invalid, explain what the image actually depicts and that no contract clauses exist. If valid, leave empty.",
+  "extractedText": "If valid, all transcribed contract text and clauses. If invalid, leave empty string."
+}`;
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: cleanMime,
+                      data: base64Data,
+                    },
+                  },
+                  { text: prompt },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.1,
+            },
+          }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          return {
+            text: parsed.extractedText || "",
+            isLegalDoc: parsed.isValidLegalDocument !== false,
+            invalidReason: parsed.reason || undefined,
+            isImageOrPdf: true,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("Gemini multimodal OCR failed:", err);
+    }
+  }
+
+  // 2. OpenAI Vision (gpt-4o-mini) for images
+  if (activeKey.startsWith("sk-") && mimeType.startsWith("image/")) {
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${activeKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: `You are LexiGuard AI OCR Verifier. Check if this image is a legal contract or agreement.
+If NOT a legal document (e.g. photos of rooms, boardrooms, people, architecture):
+Return JSON: {"isValidLegalDocument": false, "reason": "This image depicts an executive room / non-contract scene and contains no legal clauses.", "extractedText": ""}
+If it is a legal contract:
+Return JSON: {"isValidLegalDocument": true, "reason": "", "extractedText": "Extracted text"}`,
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image_url",
+                  image_url: { url: `data:${mimeType};base64,${base64Data}` },
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const jsonText = data.choices?.[0]?.message?.content;
+        if (jsonText) {
+          const parsed = JSON.parse(jsonText);
+          return {
+            text: parsed.extractedText || "",
+            isLegalDoc: parsed.isValidLegalDocument !== false,
+            invalidReason: parsed.reason || undefined,
+            isImageOrPdf: true,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("OpenAI OCR failed:", err);
+    }
+  }
+
+  // 3. Fallback Heuristic Inspection when no API key is active
+  // Do NOT invent fake dummy text!
+  const lowerName = file.name.toLowerCase();
+  const isObviousNonLegal =
+    lowerName.includes("boardroom") ||
+    lowerName.includes("dusk") ||
+    lowerName.includes("photo") ||
+    lowerName.includes("wallpaper") ||
+    lowerName.includes("screenshot") ||
+    lowerName.includes("render") ||
+    lowerName.includes("interior") ||
+    lowerName.includes("meeting") ||
+    lowerName.includes("art");
+
+  if (isObviousNonLegal) {
+    return {
+      text: "",
+      isLegalDoc: false,
+      invalidReason: `The uploaded image ("${file.name}") appears to be an office photograph or architectural rendering, not an authentic legal contract.`,
+      isImageOrPdf: true,
+    };
+  }
+
+  return {
+    text: "",
+    isLegalDoc: true,
+    invalidReason: undefined,
+    isImageOrPdf: true,
+  };
+}
+
+// ============================================================================
+// INTERACTIVE AI LEGAL COPILOT CHAT ENGINE
+// ============================================================================
+
 export async function askLegalCopilotAI(
   question: string,
   contractText: string,
   contractTitle: string,
   auditReport: LegalAuditReport | null,
-  apiKey?: string,
-  chatHistory: { sender: "user" | "ai"; text: string }[] = []
+  customApiKey?: string,
+  chatHistory: { sender: string; text: string }[] = []
 ): Promise<string> {
-  const activeKey = apiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+  const activeKey = (customApiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || "").trim();
 
-  // 1. Check with OpenAI (GPT-4o / GPT-4o-mini) if key starts with "sk-"
+  // 1. Check with OpenAI if key starts with "sk-"
   if (activeKey.startsWith("sk-")) {
     try {
       const messages = [
         {
-          role: "system",
-          content: `You are LexiGuard Copilot, an elite Senior Legal Counsel and Contract Negotiation Specialist for the Blockchain Legal Institute (BLI).
-Provide clear, protective, and actionable legal guidance on contracts, clauses, risks, and negotiation strategies.
-
+          role: "system" as const,
+          content: `You are LexiGuard AI Counsel & Legal Co-Pilot, an elite Senior Legal Counsel and Contract Negotiation Specialist for the Blockchain Legal Institute (BLI).
 CURRENT CONTRACT CONTEXT:
-Document: ${contractTitle || "Legal Agreement"}
-${auditReport ? `Compliance Score: ${auditReport.overallScore}/100 | Critical Flags: ${auditReport.criticalRisksCount} | Warnings: ${auditReport.warningRisksCount}\nRisk Summary: ${auditReport.riskSummary}` : ""}
+Document: ${contractTitle || "Custom Legal Agreement"}
+${auditReport ? `Health Score: ${auditReport.overallScore}/100 | Critical Risks: ${auditReport.criticalRisksCount} | Warnings: ${auditReport.warningRisksCount}\nSummary: ${auditReport.riskSummary}` : "No formal audit run yet."}
 
-ACTIVE CONTRACT TEXT:
+CONTRACT TEXT:
 """
-${(contractText || "").slice(0, 14000)}
+${(contractText || "").slice(0, 10000)}
 """
 
-GUIDELINES:
-- Give direct, authoritative, yet easy-to-understand legal advice.
-- Cite specific clauses from the contract.
-- If asked for email negotiation templates, write clean, ready-to-send responses.
-- If the user asks in Sinhala, English, or another language, reply fluently in that language.
-- Use bold text and bullet points for high readability.`,
+INSTRUCTIONS:
+- If user greets (hi, hello, etc.), greet them warmly, introduce yourself, and suggest 3 helpful inquiries.
+- If user asks about the working process ("this working process can u tell me", "how does this work", etc.), explain the 5-step LexiGuard workflow (1. Document Upload, 2. AI Risk Audit, 3. Clause Redlines, 4. Base Sepolia Notarization, 5. Escrow Vault).
+- If user asks about contract clauses, cite specific clauses and give balanced redlines.
+- If asked in Sinhala, respond fluently in Sinhala! If asked in English, respond in English.
+- Use bold text and bullet points.`,
         },
         ...chatHistory.slice(-4).map((m) => ({
           role: m.sender === "user" ? ("user" as const) : ("assistant" as const),
@@ -583,30 +757,35 @@ GUIDELINES:
     }
   }
 
-  // 2. Check with Google Gemini (1.5 Flash) if key starts with "AIzaSy"
-  if (activeKey.startsWith("AIzaSy")) {
+  // 2. Check with Google Gemini (1.5 Flash)
+  if (activeKey && !activeKey.startsWith("sk-") && activeKey.length > 15) {
     try {
-      const prompt = `You are LexiGuard Copilot, an elite Senior Legal Counsel and Contract Negotiation Specialist for the Blockchain Legal Institute (BLI).
-Provide clear, protective, and actionable legal guidance on contracts, clauses, risks, and negotiation strategies.
+      const prompt = `You are LexiGuard AI Counsel & Legal Co-Pilot, an elite Senior Legal Counsel and Contract Negotiation Specialist for the Blockchain Legal Institute (BLI).
+Provide clear, protective, and actionable legal guidance, contract analysis, and platform explanation.
 
-CURRENT CONTRACT CONTEXT:
-Document: ${contractTitle || "Legal Agreement"}
-${auditReport ? `Health Score: ${auditReport.overallScore}/100 | Critical Risks: ${auditReport.criticalRisksCount} | Warnings: ${auditReport.warningRisksCount}\nSummary: ${auditReport.riskSummary}` : ""}
+CURRENT CONTEXT:
+Document: ${contractTitle || "Custom Legal Agreement"}
+${auditReport ? `Health Score: ${auditReport.overallScore}/100 | Critical Risks: ${auditReport.criticalRisksCount} | Warnings: ${auditReport.warningRisksCount}\nSummary: ${auditReport.riskSummary}` : "No formal audit run yet."}
 
 CONTRACT TEXT:
 """
 ${(contractText || "").slice(0, 15000)}
 """
 
-USER QUESTION:
+USER INQUIRY:
 ${question}
 
-INSTRUCTIONS:
-- Give thorough, actionable legal advice.
-- Point to exact clauses and explain legal consequences (e.g. damages, indemnity traps, termination without pay).
-- If asked how to renegotiate, draft an assertive, professional counter-proposal or email.
-- If asked in Sinhala, respond fluently in Sinhala. If asked in English, respond in English.
-- Use bullet points, bold key terms, and recommend concrete redlines.`;
+GUIDELINES:
+1. GREETINGS: If user says 'hi', 'hello', 'hey', 'good morning', etc., greet them warmly and introduce yourself as LexiGuard AI Co-Pilot with 3 helpful suggestions.
+2. WORKING PROCESS: If user asks about the working process ("this working process can u tell me", "how does this work", "system workflow", "how it works"), explain the 5-step workflow clearly:
+   - Step 1: Upload Document (PDF, DOCX, Image, Text) to Firebase Cloud Vault with AI Multimodal verification.
+   - Step 2: AI Legal Risk Audit across 6 risk pillars (Liability, Termination, Payment, IP, Jurisdiction, Confidentiality).
+   - Step 3: Clause-by-Clause Redlines & editable Microsoft Word (.doc) download.
+   - Step 4: Base Sepolia On-Chain Notarization with SHA-256 cryptographic proof on BaseScan.
+   - Step 5: Smart Escrow Vault locking funds for guaranteed contractor payouts.
+3. CONTRACT CLAUSES: If asking about contract terms (liability cap, termination without pay, holdbacks, IP), cite actual contract terms and explain risks.
+4. LANGUAGE: If user asks in Sinhala or Singlish, reply fluently in Sinhala! If in English, reply in English.
+5. FORMAT: Use bold headings and clean bullet points.`;
 
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${activeKey}`,
@@ -643,14 +822,189 @@ function generateSmartHeuristicLegalAnswer(
   contractTitle: string,
   auditReport: LegalAuditReport | null
 ): string {
-  const qLower = question.toLowerCase();
-  const isSinhala = /[\u0D80-\u0DFF]/.test(question) || qLower.includes("kohomada") || qLower.includes("mokakda") || qLower.includes("puluwanda");
+  const qLower = question.toLowerCase().trim();
+  const isSinhala =
+    /[\u0D80-\u0DFF]/.test(question) ||
+    qLower.includes("kohomada") ||
+    qLower.includes("mokakda") ||
+    qLower.includes("puluwanda") ||
+    qLower.includes("wada karanne") ||
+    qLower.includes("kiyanna");
 
-  // A. TERMINATION & EXIT
-  if (qLower.includes("terminat") || qLower.includes("cancel") || qLower.includes("fire") || qLower.includes("exit") || qLower.includes("end agreement") || qLower.includes("අවසන්")) {
+  // 1. GREETINGS (hi, hello, hey, etc.)
+  const isGreeting =
+    qLower === "hi" ||
+    qLower === "hello" ||
+    qLower === "hey" ||
+    qLower.startsWith("hi ") ||
+    qLower.startsWith("hello ") ||
+    qLower.startsWith("hey ") ||
+    qLower.includes("good morning") ||
+    qLower.includes("good evening") ||
+    qLower.includes("good afternoon") ||
+    qLower === "halo" ||
+    qLower === "ayubowan" ||
+    qLower === "කොහොමද" ||
+    qLower.includes("ආයුබෝවන්");
+
+  if (isGreeting) {
+    if (isSinhala) {
+      return `👋 **ආයුබෝවන්! මම LexiGuard AI Legal Co-Pilot.**
+මම ඔබගේ නීතිමය ගිවිසුම් (Legal Contracts) පරීක්ෂා කර, සැඟවුණු අවාසිදායක කොන්දේසි හඳුනාගෙන උපදෙස් ලබා දෙන නීති උපදේශක AI සහයකයෙක් වෙමි.
+
+**ඔබට මාගෙන් මෙවැනි දේ විමසිය හැක:**
+* 🔍 **අවදානම් විශ්ලේෂණය:** *"මේ ගිවිසුමේ ඇති ප්‍රධාන අවදානම් මොනවාද?"*
+* ⚖️ **ගිවිසුම අවසන් කිරීම:** *"වැඩ කළ මුදල් නොගෙවා Client ට ගිවිසුම අවසන් කළ හැකිද?"*
+* 🛡️ **වගකීම් සීමාව:** *"මගේ වගකීම් සීමාව (Liability Cap) කොතරම්ද?"*
+* ⚙️ **ක්‍රියාකාරී පියවර:** *"LexiGuard ක්‍රියාත්මක වන ආකාරය (Working Process) පැහැදිලි කරන්න"*
+* ✉️ **සාකච්ඡා ඊමේල්:** *"Client ට යැවීමට සංශෝධිත ඊමේල් කෙටුම්පතක් ලියන්න"*
+
+ඔබට අවශ්‍ය ඕනෑම ප්‍රශ්නයක් සිංහලෙන් හෝ ඉංග්‍රීසියෙන් විමසන්න!`;
+    }
+
+    return `👋 **Hello! I am LexiGuard AI Counsel & Legal Co-Pilot.**
+I am an intelligent legal assistant built for the Blockchain Legal Institute (BLI) Hackathon to protect contractors, freelancers, and businesses from one-sided, predatory contracts.
+
+**Here is how I can assist you right now:**
+* 🔍 **Analyze Risks:** Ask *"What are the biggest traps in this agreement?"*
+* ⚖️ **Termination Rights:** Ask *"Can the client terminate without paying for work done?"*
+* 🛡️ **Liability Limits:** Ask *"What is my indemnification and liability cap?"*
+* ⚙️ **Platform Workflow:** Ask *"Can you tell me the working process?"*
+* ✉️ **Negotiation Counter-Offer:** Ask *"Draft a polite negotiation email to the client"*
+
+Feel free to ask me anything about your current document or contract terms!`;
+  }
+
+  // 2. WORKING PROCESS & SYSTEM WORKFLOW
+  const isWorkflow =
+    qLower.includes("working process") ||
+    qLower.includes("work process") ||
+    qLower.includes("how does this work") ||
+    qLower.includes("how it works") ||
+    qLower.includes("explain process") ||
+    qLower.includes("how to use") ||
+    qLower.includes("steps") ||
+    qLower.includes("workflow") ||
+    qLower.includes("system process") ||
+    qLower.includes("what does this do") ||
+    qLower.includes("wada karanne") ||
+    qLower.includes("ක්‍රියාවලිය") ||
+    qLower.includes("meken wenne");
+
+  if (isWorkflow) {
+    if (isSinhala) {
+      return `⚙️ **LexiGuard AI ක්‍රියාකාරී පියවර (Working Process & Workflow):**
+
+LexiGuard AI ඔබගේ නීතිමය ගිවිසුම් ආරම්භයේ සිට අවසානය දක්වා පූර්ණ ආරක්ෂාවක් සහිතව පරීක්ෂා කරන ආකාරය මෙන්න:
+
+1. **📄 1. Document Upload & Multimodal Extraction (ලේඛන උඩුගත කිරීම):**
+   - PDF, DOCX, Images (PNG/JPG), හෝ Text ගොනු ලෙස ගිවිසුම උඩුගත කළ හැක.
+   - ලේඛනය ආරක්ෂිතව **Firebase Cloud Vault** හි ගබඩා වේ.
+   - Google Gemini AI මඟින් ලේඛනය සැබෑ නීතිමය ගිවිසුමක්දැයි තහවුරු කර පෙළ හඳුනා ගනී (OCR).
+
+2. **🧠 2. AI Legal Risk Audit (කෘතිම බුද්ධි අවදානම් විගණනය):**
+   - අපගේ AI මාදිලිය මඟින් අවදානම් කාණ්ඩ 6ක් (Liability, Termination, Payment, IP Rights, Jurisdiction, Confidentiality) පරීක්ෂා කරයි.
+   - ගිවිසුමට ලකුණු (Compliance Score 0-100) ලබා දී අනතුරුදායක කොන්දේසි රතු පැහැයෙන් (Critical Risks) පෙන්වයි.
+
+3. **✏️ 3. Clause-by-Clause Redlines (නීතිමය විසඳුම් හා සංශෝධන):**
+   - අසාධාරණ කොන්දේසි වෙනුවට ජාත්‍යන්තර සම්මුතීන්ට අනුකූල සාධාරණ ප්‍රති-කොන්දේසි (Balanced Redlines) AI විසින් නිර්දේශ කරයි.
+   - සංශෝධිත සම්පූර්ණ ගිවිසුම **Microsoft Word (.doc)** ලෙස බාගත (Download) කරගත හැක.
+
+4. **⛓️ 4. Base Sepolia On-Chain Notarization (බ්ලොක්චේන් සත්‍යාපනය):**
+   - ගිවිසුමේ SHA-256 ඩිජිටල් මුද්‍රාව (Cryptographic Hash) **Base Sepolia (Ethereum L2)** බ්ලොක්චේන් මත සදාකාලිකව ලියාපදිංචි කරයි.
+   - BaseScan ගවේෂකය හරහා ඕනෑම අයෙකුට ගිවිසුමේ නිරවද්‍යතාවය සහ කාලය සත්‍යාපනය කළ හැක.
+
+5. **🔒 5. Smart Escrow Vault (විකේන්ද්‍රීය ගෙවීම් සුරක්ෂිතතාව):**
+   - වැඩ ආරම්භ කිරීමට පෙර මුදල් Escrow Smart Contract එකෙහි තැන්පත් කර, වැඩ නිමවූ පසු ස්වයංක්‍රීයව ගෙවීම් ලබා ගැනීමේ පහසුකම ලබා දෙයි.
+
+ඔබගේ වත්මන් ගිවිසුම ගැන යමක් විමසීමට අවශ්‍යද?`;
+    }
+
+    return `⚙️ **LexiGuard AI End-to-End Working Process & System Architecture:**
+
+LexiGuard AI combines multimodal Generative AI with Ethereum Layer-2 Cryptographic Proofs across 5 streamlined stages:
+
+1. **📄 1. Document Ingestion & Multimodal OCR:**
+   - Upload any contract as a **PDF**, **DOCX**, **Image (PNG/JPG)**, or **Plain Text**.
+   - Encrypted and archived securely in the **Firebase Cloud Vault**.
+   - Gemini Multimodal Vision verifies document authenticity and extracts text without hallucination.
+
+2. **🧠 2. AI Legal Risk Audit & Scoring:**
+   - Evaluates 6 critical legal pillars:
+     - **Liability & Indemnity** (checks for uncapped unilateral liability traps)
+     - **Termination Rights** (flags immediate termination without compensation)
+     - **Payment & Net Terms** (identifies predatory holdbacks and Net 90 delays)
+     - **Intellectual Property** (preserves your pre-existing tools and starter kits)
+     - **Governing Law & Jurisdiction** (highlights foreign court disadvantages)
+     - **Confidentiality Scope** (ensures reasonable, mutual non-disclosure periods)
+   - Assigns a transparent Contract Health Score from 0 to 100.
+
+3. **✏️ 3. Clause-by-Clause Redlining & Word Export:**
+   - Generates lawyer-grade, reciprocal replacement terms for every high-risk clause.
+   - One-click export to an official, formatted **Microsoft Word (.doc)** document for instant signing.
+
+4. **⛓️ 4. Base Sepolia On-Chain Notarization:**
+   - Calculates a deterministic SHA-256 digital fingerprint of the agreed terms.
+   - Broadcasts a transaction to the **Base Sepolia (Ethereum L2)** blockchain.
+   - Produces an immutable, verifiable public record on BaseScan and a downloadable tamper-proof Certificate of Notarization.
+
+5. **🔒 5. Smart Escrow & Payment Vault:**
+   - Integrates with decentralized milestone escrow so client funds are locked upfront before work begins, releasing upon milestone approval.
+
+Would you like me to inspect any clause in your active document?`;
+  }
+
+  // 3. BLOCKCHAIN & NOTARIZATION
+  if (
+    qLower.includes("notariz") ||
+    qLower.includes("blockchain") ||
+    qLower.includes("basescan") ||
+    qLower.includes("base sepolia") ||
+    qLower.includes("proof") ||
+    qLower.includes("on-chain") ||
+    qLower.includes("on chain") ||
+    qLower.includes("hash")
+  ) {
+    return `⛓️ **On-Chain Legal Notarization on Base Sepolia:**
+* **How It Works:** LexiGuard AI computes a cryptographic SHA-256 hash of the exact contract text. This unique hash is recorded into our smart contract on **Base Sepolia (Coinbase Ethereum L2)**.
+* **Why It Matters:** 
+  1. **Proof of Existence:** Proves this exact version of the contract existed at this exact timestamp.
+  2. **Tamper Proof:** If either party alters even a single comma later, the cryptographic hash will change, immediately exposing the tampering.
+  3. **Admissible Evidence:** Under ESIGN Act and international electronic evidence standards, cryptographic timestamp proofs provide strong legal evidentiary value.
+* **Verification:** Every notarization produces a permanent transaction hash on [BaseScan Sepolia](https://sepolia.basescan.org) with an immutable block timestamp.`;
+  }
+
+  // 4. ESCROW & WALLET PAYMENTS
+  if (
+    qLower.includes("escrow") ||
+    qLower.includes("wallet") ||
+    qLower.includes("funds") ||
+    qLower.includes("milestone") ||
+    qLower.includes("credits") ||
+    qLower.includes("topup") ||
+    qLower.includes("token")
+  ) {
+    return `🔒 **Smart Contract Escrow & Payment Protection:**
+* **The Problem:** Freelancers and agencies routinely face clients who delay invoices, demand free scope creep, or ghost after delivery.
+* **The Solution:** LexiGuard's Escrow Vault locks the agreed milestone funds in an on-chain smart contract before any work starts.
+* **Release Mechanism:**
+  - Upon milestone delivery and mutual sign-off, funds are released directly to the contractor's wallet.
+  - In case of dispute, BLI arbitration can review the notarized contract hash to execute fair payout.
+* **Credits:** Audits require 1 audit credit (free test credits are provided on connect). You can top up anytime via your connected Web3 wallet.`;
+  }
+
+  // 5. TERMINATION & EXIT
+  if (
+    qLower.includes("terminat") ||
+    qLower.includes("cancel") ||
+    qLower.includes("fire") ||
+    qLower.includes("exit") ||
+    qLower.includes("end agreement") ||
+    qLower.includes("අවසන්")
+  ) {
     if (isSinhala) {
       return `📌 **ගිවිසුම අවසන් කිරීම (Termination Risk Analysis):**
-* **වත්මන් තත්ත්වය:** මෙම ගිවිසුමේ සාමාන්‍යයෙන් පාරිභෝගිකයාට (Client) ඕනෑම මොහොතක කිසිදු පූර්ව දැනුම්දීමකින් තොරව (without cause/notice) ගිවිසුම අවසන් කිරීමට ඉඩ ලබා දී තිබිය හැක.
+* **වත්මන් තත්ත්වය:** මෙම ගිවිසුමේ පාරිභෝගිකයාට (Client) ඕනෑම මොහොතක කිසිදු පූර්ව දැනුම්දීමකින් තොරව (without cause/notice) ගිවිසුම අවසන් කිරීමට ඉඩ ලබා දී තිබිය හැක.
 * **ප්‍රධාන අවදානම:** මේ වන විට නිම කළ වැඩ කොටස් (in-progress milestones) සඳහා මුදල් නොගෙවා සිටීමට Client ට ඇති හැකියාවයි.
 * **නිර්දේශිත සංශෝධනය (Redline):**
   > "දෙපාර්ශවයටම අවම වශයෙන් දින 14 ක ලිඛිත පූර්ව දැනුම්දීමක් (14 days written notice) අවශ්‍ය වන අතර, දැනුම්දීම දක්වා නිම කළ සියලුම සේවාවන් සඳහා සම්පූර්ණ ගෙවීම් කළ යුතුය."`;
@@ -665,8 +1019,14 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
 * **Negotiation Tip:** Request mutual notice periods and a kill-fee (e.g. 25% of the remaining milestone value) if terminated without cause.`;
   }
 
-  // B. INDEMNITY & LIABILITY
-  if (qLower.includes("liab") || qLower.includes("indemn") || qLower.includes("sue") || qLower.includes("damage") || qLower.includes("වගකී")) {
+  // 6. INDEMNITY & LIABILITY
+  if (
+    qLower.includes("liab") ||
+    qLower.includes("indemn") ||
+    qLower.includes("sue") ||
+    qLower.includes("damage") ||
+    qLower.includes("වගකී")
+  ) {
     if (isSinhala) {
       return `🛡️ **වගකීම් සහ වන්දි ගෙවීම් (Liability & Indemnification):**
 * **හඳුනාගත් අවදානම:** කොන්ත්‍රාත්කරුට (Contractor) සීමාවක් නොමැතිව (Unlimited Unilateral Indemnity) සියලුම පාඩු සහ නීති ගාස්තු සඳහා වගකීම පවරා ඇත.
@@ -683,8 +1043,15 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
   > *"Except for gross negligence or willful misconduct, Contractor's aggregate liability under this Agreement shall be capped at the total fees actually received by Contractor during the preceding six (6) months."*`;
   }
 
-  // C. PAYMENT, NET DAYS, HOLDBACKS & ESCROW
-  if (qLower.includes("pay") || qLower.includes("money") || qLower.includes("holdback") || qLower.includes("net") || qLower.includes("escrow") || qLower.includes("ගෙවීම්")) {
+  // 7. PAYMENT, NET DAYS, HOLDBACKS & ESCROW
+  if (
+    qLower.includes("pay") ||
+    qLower.includes("money") ||
+    qLower.includes("holdback") ||
+    qLower.includes("net") ||
+    qLower.includes("escrow") ||
+    qLower.includes("ගෙවීම්")
+  ) {
     return `💰 **Payment Terms & Cash Flow Safety Analysis:**
 * **Payment Terms Warning:** Net 60 or Net 90 payment terms combined with subjective satisfaction clauses or 30% retention holdbacks create severe counterparty risk.
 * **On-Chain Escrow Advantage:** With LexiGuard's Base Sepolia Escrow Vault, funds can be locked upfront before you write a single line of code, releasing automatically upon verifiable cryptographic proof of delivery.
@@ -692,8 +1059,15 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
   > *"Invoices shall be payable within Net 15 business days. In the event of an undisputed milestone, payments delayed beyond thirty (30) days shall accrue interest at 1.5% per month."*`;
   }
 
-  // D. IP & WORK FOR HIRE
-  if (qLower.includes("ip") || qLower.includes("code") || qLower.includes("ownership") || qLower.includes("copyright") || qLower.includes("patent") || qLower.includes("හිමිකම්")) {
+  // 8. IP & WORK FOR HIRE
+  if (
+    qLower.includes("ip") ||
+    qLower.includes("code") ||
+    qLower.includes("ownership") ||
+    qLower.includes("copyright") ||
+    qLower.includes("patent") ||
+    qLower.includes("හිමිකම්")
+  ) {
     return `💻 **Intellectual Property (IP) Transfer Scope:**
 * **Overbroad Assignment Flag:** The draft clause attempts to seize "all methodologies, general knowledge, and pre-existing frameworks".
 * **Safeguard Your Tools:** You must explicitly preserve your pre-existing code libraries, starter kits, and proprietary methodologies.
@@ -701,8 +1075,14 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
   > *"Contractor assigns ownership of bespoke custom deliverables upon full and final payment. Pre-existing contractor intellectual property and general development tools remain solely owned by Contractor, subject to a perpetual, non-exclusive license to Client."*`;
   }
 
-  // E. DRAFTING A NEGOTIATION EMAIL
-  if (qLower.includes("email") || qLower.includes("draft") || qLower.includes("write to client") || qLower.includes("how to ask") || qLower.includes("ලිපිය")) {
+  // 9. DRAFTING A NEGOTIATION EMAIL
+  if (
+    qLower.includes("email") ||
+    qLower.includes("draft") ||
+    qLower.includes("write to client") ||
+    qLower.includes("how to ask") ||
+    qLower.includes("ලිපිය")
+  ) {
     return `✉️ **Ready-to-Send Negotiation Email Template:**
 
 **Subject:** Feedback on Agreement for ${contractTitle || "Our Engagement"}
@@ -723,16 +1103,16 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
 *[Your Name]*`;
   }
 
-  // F. GENERAL / SUMMARY
+  // 10. GENERAL / SUMMARY
   return `🤖 **LexiGuard AI Counsel Evaluation:**
 Regarding **"${question}"** for **${contractTitle || "this contract"}**:
 
-* **Contract Status:** ${auditReport ? `Compliance Score is **${auditReport.overallScore}/100** with **${auditReport.criticalRisksCount} critical flags** detected.` : "Active contract parsed in session memory."}
+* **Contract Status:** ${auditReport ? `Compliance Score is **${auditReport.overallScore}/100** with **${auditReport.criticalRisksCount} critical flags** detected.` : "Active contract loaded in session memory."}
 * **Governing Law Context:** ${auditReport?.governingLaw || "Delaware / Standard Commercial Law"}.
 * **Actionable Guidance:**
   - Always demand bilateral reciprocity: any right granted to the client (termination, indemnification, audit rights) should have an equivalent balance protecting the contractor.
   - Anchor finalized agreement hashes on Base Sepolia using our **Notarize On-Chain** feature to establish immutable, tamper-proof proof of agreed terms.
 
-*Feel free to ask me to draft a counter-clause, explain any specific paragraph, or create a client negotiation response!*`;
+*Feel free to ask me to draft a counter-clause, explain any specific paragraph, or tell you more about the working process!*`;
 }
 

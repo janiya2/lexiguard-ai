@@ -50,6 +50,7 @@ import {
   LegalAuditReport,
   ClauseAnalysis,
   askLegalCopilotAI,
+  extractContractTextFromMedia,
 } from "@/lib/aiLegalAuditor";
 import { downloadAmendedContractDoc } from "@/lib/documentExporter";
 import { notarizeDocumentOnChain, NotarizationResult } from "@/lib/web3Service";
@@ -122,6 +123,12 @@ export default function AuditorPage() {
   useEffect(() => {
     async function init() {
       const s = await getSiteSettings();
+      if (typeof window !== "undefined") {
+        const localKey = localStorage.getItem("lexiguard_custom_ai_key");
+        if (localKey && !s.geminiApiKey) {
+          s.geminiApiKey = localKey;
+        }
+      }
       setSettings(s);
       setCustomKeyInput(s.geminiApiKey || "");
       if (s.geminiApiKey?.startsWith("sk-")) {
@@ -139,7 +146,11 @@ export default function AuditorPage() {
   }, [account]);
 
   const handleSaveAiSettings = async () => {
-    const updated = { ...settings, geminiApiKey: customKeyInput.trim() };
+    const trimmed = customKeyInput.trim();
+    const updated = { ...settings, geminiApiKey: trimmed };
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lexiguard_custom_ai_key", trimmed);
+    }
     setSettings(updated);
     await saveSiteSettings(updated);
     setIsAiModalOpen(false);
@@ -212,6 +223,7 @@ export default function AuditorPage() {
       // 1. Upload to Firebase Storage
       const uploaded = await uploadContractDocument(file);
       const isImg = file.type.startsWith("image/");
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
       setUploadedFileMeta({
         name: file.name,
@@ -222,39 +234,68 @@ export default function AuditorPage() {
       });
 
       // 2. Read content based on type
-      if (isImg) {
-        // Read as base64 for thumbnail preview
+      if (isImg || isPdf) {
+        // Read file as base64 for preview thumbnail and multimodal vision OCR
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
           const dataUrl = event.target?.result as string;
           if (dataUrl) {
-            setUploadedFileMeta((prev) => (prev ? { ...prev, url: dataUrl } : null));
+            if (isImg) {
+              setUploadedFileMeta((prev) => (prev ? { ...prev, url: dataUrl } : null));
+            }
+            const base64Data = dataUrl.split(",")[1] || "";
+            if (base64Data) {
+              const extraction = await extractContractTextFromMedia(
+                file,
+                base64Data,
+                file.type || (isPdf ? "application/pdf" : "image/png"),
+                settings.geminiApiKey
+              );
+
+              if (!extraction.isLegalDoc) {
+                // Reject non-legal image/doc! Never fabricate fake clauses!
+                setContractText("");
+                setInvalidDocError(
+                  extraction.invalidReason ||
+                    `Upload Rejected: The uploaded file ("${file.name}") does not appear to be an authentic legal contract.`
+                );
+              } else if (extraction.text && extraction.text.trim().length > 0) {
+                setContractText(extraction.text);
+                setInvalidDocError(null);
+              } else {
+                // Image stored, but no OCR text extracted (no API key or non-text image)
+                setContractText("");
+                setInvalidDocError(
+                  `Document stored in Firebase Cloud Vault ("${file.name}"). To enable automatic AI Optical Character Recognition (OCR) on images or PDFs, connect your Gemini API Key in AI Settings, or paste the contract text below.`
+                );
+              }
+            }
           }
         };
         reader.readAsDataURL(file);
-
-        if (!contractText || contractText.startsWith("1. IP ASSIGNMENT")) {
-          setContractText(
-            `// [LEGAL DOCUMENT IMAGE ATTACHED: ${file.name}]\n// Verified & Stored on Firebase Cloud Vault\n\n1. SCOPE OF SERVICES: Contractor shall provide engineering services as specified in the attached invoice image.\n2. PAYMENT TERMS: Net 45 days upon deliverables handover, subject to 20% warranty holdback.\n3. INTELLECTUAL PROPERTY: Client retains full ownership of all customized works; pre-existing tools remain Contractor property.\n4. INDEMNITY: Mutual indemnification limited to total fees paid under this engagement.`
-          );
-        }
       } else if (file.name.endsWith(".txt") || file.name.endsWith(".md")) {
         const reader = new FileReader();
         reader.onload = (event) => {
           const text = event.target?.result as string;
-          if (text) setContractText(text);
+          if (text) {
+            setContractText(text);
+            setInvalidDocError(null);
+          }
         };
         reader.readAsText(file);
       } else {
-        // PDF or DOCX or DOC
+        // DOCX or DOC or other file types
         const reader = new FileReader();
         reader.onload = (event) => {
           const raw = event.target?.result;
-          if (typeof raw === "string" && raw.trim().length > 50) {
+          if (typeof raw === "string" && raw.trim().length > 50 && !raw.includes("\x00")) {
             setContractText(raw);
+            setInvalidDocError(null);
           } else {
-            setContractText(
-              `// [LEGAL DOCUMENT ATTACHED: ${file.name}]\n// Stored on Firebase Cloud Vault\n\n1. STATEMENT OF WORK: Contractor performs milestones defined under client agreement.\n2. PAYMENT & INVOICING: Invoices payable within 30 days of submission upon verified milestone delivery.\n3. WARRANTIES & DISCLAIMERS: Standard 30-day warranty against code defects.\n4. TERMINATION NOTICE: 14 calendar days advance notice required by either party.`
+            // Cannot read binary doc without docx parser
+            setContractText("");
+            setInvalidDocError(
+              `Document ("${file.name}") uploaded to Firebase Vault. To audit custom Word documents (.docx), paste the clause text directly into the editor, or pick from our 10 Test Contracts.`
             );
           }
         };
