@@ -18,6 +18,10 @@ import {
   Sparkles,
   ShieldCheck,
   AlertCircle,
+  Coins,
+  Percent,
+  Wallet,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   getSiteSettings,
@@ -26,10 +30,12 @@ import {
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/firestoreService";
+import { useWeb3 } from "@/context/Web3Context";
 
 export default function AdminPage() {
+  const { account } = useWeb3();
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
-  const [activeTab, setActiveTab] = useState<"cms" | "keys" | "docs" | "health">("cms");
+  const [activeTab, setActiveTab] = useState<"cms" | "treasury" | "keys" | "docs" | "health">("cms");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -115,6 +121,18 @@ export default function AdminPage() {
           >
             <Globe className="w-3.5 h-3.5" />
             <span>Landing Page CMS</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("treasury")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition-all ${
+              activeTab === "treasury"
+                ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Coins className="w-3.5 h-3.5" />
+            <span>Treasury & Fees (1%)</span>
           </button>
 
           <button
@@ -236,6 +254,134 @@ export default function AdminPage() {
                     Enable Web3 Smart Contract Escrow Milestone Module
                   </span>
                 </label>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* TAB: PROTOCOL TREASURY & REVENUE */}
+        {activeTab === "treasury" && (
+          <form onSubmit={handleSave} className="space-y-6">
+            <div className="p-6 rounded-3xl bg-slate-900/60 border border-white/5 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-5">
+                <div>
+                  <h3 className="font-bold text-base text-white flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-amber-400" />
+                    <span>Platform Protocol Treasury & Revenue (1% Fee Routing)</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Configure your InnoXpert platform treasury address to automatically receive micro-fees on every on-chain legal escrow milestone payout.
+                  </p>
+                </div>
+                <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-mono font-semibold shrink-0">
+                  Current Fee: {settings.protocolFeePercentage}%
+                </div>
+              </div>
+
+              <div className="space-y-5 text-xs">
+                {/* Treasury Wallet Input */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-slate-400 font-semibold">
+                      Platform Owner Treasury Address (Payout Recipient)
+                    </label>
+                    {account && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSettings({
+                            ...settings,
+                            ownerTreasuryAddress: account,
+                          })
+                        }
+                        className="text-cyan-400 hover:underline text-[11px] font-mono flex items-center gap-1"
+                      >
+                        <Wallet className="w-3 h-3" />
+                        <span>Use My Connected Wallet ({account.slice(0, 6)}...{account.slice(-4)})</span>
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.ownerTreasuryAddress}
+                    onChange={(e) =>
+                      setSettings({ ...settings, ownerTreasuryAddress: e.target.value })
+                    }
+                    placeholder="0x..."
+                    className="w-full rounded-xl bg-slate-950 p-3 font-mono text-cyan-300 border border-white/5 focus:border-amber-500/40 focus:outline-none"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Every time a client releases funds, the smart contract automatically transfers {settings.protocolFeePercentage}% to this address.
+                  </p>
+                </div>
+
+                {/* Protocol Fee Slider & Input */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1.5">
+                      Protocol Fee Rate (%)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.1"
+                        value={settings.protocolFeePercentage}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            protocolFeePercentage: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="flex-1 accent-amber-400"
+                      />
+                      <span className="font-mono text-amber-300 font-bold w-12 text-right">
+                        {settings.protocolFeePercentage}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 font-semibold mb-1.5">
+                      Enable Protocol Fee Collection
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer pt-2">
+                      <input
+                        type="checkbox"
+                        checked={settings.enableProtocolFee}
+                        onChange={(e) =>
+                          setSettings({ ...settings, enableProtocolFee: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded text-amber-500 focus:ring-0 bg-slate-950 border-white/10"
+                      />
+                      <span className="text-slate-300 font-medium">
+                        Automatically deduct {settings.protocolFeePercentage}% protocol fee
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Live Simulation Calculator */}
+                <div className="mt-4 p-4 rounded-2xl bg-amber-950/20 border border-amber-500/20 space-y-2">
+                  <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                    Live Revenue Split Example (On 1.000 ETH Milestone)
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono text-slate-300">
+                    <div className="flex justify-between p-2 rounded-lg bg-black/30">
+                      <span className="text-slate-400">Contractor Payout ({(100 - settings.protocolFeePercentage).toFixed(1)}%):</span>
+                      <span className="text-emerald-400 font-bold">
+                        {(1 - settings.protocolFeePercentage / 100).toFixed(4)} ETH
+                      </span>
+                    </div>
+                    <div className="flex justify-between p-2 rounded-lg bg-black/30">
+                      <span className="text-slate-400">Admin Treasury Revenue ({settings.protocolFeePercentage}%):</span>
+                      <span className="text-amber-400 font-bold">
+                        {(settings.protocolFeePercentage / 100).toFixed(4)} ETH
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </form>

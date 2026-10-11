@@ -252,6 +252,24 @@ export default function EscrowVaultSection() {
                   ETH
                 </span>
               </div>
+
+              {/* Protocol Fee Breakdown */}
+              <div className="mt-2.5 p-3 rounded-xl bg-slate-950/80 border border-white/5 space-y-1.5 text-[11px] font-mono text-slate-400">
+                <div className="flex justify-between">
+                  <span>Contractor Net Payout (99.0%):</span>
+                  <span className="text-emerald-400 font-semibold">
+                    {(parseFloat(depositAmount || "0") * 0.99).toFixed(4)} ETH
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-1">
+                    <span>InnoXpert Protocol Fee (1.0%):</span>
+                  </span>
+                  <span className="text-amber-400 font-semibold">
+                    {(parseFloat(depositAmount || "0") * 0.01).toFixed(4)} ETH
+                  </span>
+                </div>
+              </div>
             </div>
 
             <button

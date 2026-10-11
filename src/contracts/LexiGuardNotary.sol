@@ -8,6 +8,8 @@ pragma solidity ^0.8.20;
  */
 contract LexiGuardNotary {
     address public immutable owner;
+    address public treasury;
+    uint256 public protocolFeeBps = 100; // 1.00% (100 basis points)
 
     struct LegalDocument {
         bytes32 docHash;          // SHA-256 or keccak256 hash of the contract
@@ -157,7 +159,7 @@ contract LexiGuardNotary {
     }
 
     /**
-     * @dev Release escrow funds to contractor upon milestone completion
+     * @dev Release escrow funds to contractor upon milestone completion, automatically deducting protocol fee
      */
     function releaseEscrow(bytes32 _agreementId) external {
         EscrowAgreement storage agreement = escrows[_agreementId];
@@ -165,8 +167,31 @@ contract LexiGuardNotary {
         require(!agreement.isCompleted && !agreement.isRefunded, "Already finalized");
 
         agreement.isCompleted = true;
-        agreement.contractor.transfer(agreement.amount);
 
-        emit EscrowReleased(_agreementId, agreement.amount);
+        uint256 fee = (agreement.amount * protocolFeeBps) / 10000;
+        uint256 contractorPayout = agreement.amount - fee;
+
+        if (fee > 0 && treasury != address(0)) {
+            payable(treasury).transfer(fee);
+        }
+        agreement.contractor.transfer(contractorPayout);
+
+        emit EscrowReleased(_agreementId, contractorPayout);
+    }
+
+    /**
+     * @dev Set protocol treasury recipient address
+     */
+    function setTreasury(address _treasury) external onlyOwner {
+        require(_treasury != address(0), "Invalid treasury");
+        treasury = _treasury;
+    }
+
+    /**
+     * @dev Set protocol fee basis points (e.g. 100 = 1%)
+     */
+    function setProtocolFeeBps(uint256 _feeBps) external onlyOwner {
+        require(_feeBps <= 1000, "Fee cannot exceed 10%");
+        protocolFeeBps = _feeBps;
     }
 }

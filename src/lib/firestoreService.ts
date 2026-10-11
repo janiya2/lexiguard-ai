@@ -28,6 +28,9 @@ export interface SiteSettings {
   pinataJwt?: string;
   enablePublicNotarizations: boolean;
   enableEscrowModule: boolean;
+  ownerTreasuryAddress: string;
+  protocolFeePercentage: number;
+  enableProtocolFee: boolean;
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -40,6 +43,9 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   pinataJwt: "",
   enablePublicNotarizations: true,
   enableEscrowModule: true,
+  ownerTreasuryAddress: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
+  protocolFeePercentage: 1.0,
+  enableProtocolFee: true,
 };
 
 // Fetch site configuration from Firestore with fallback
