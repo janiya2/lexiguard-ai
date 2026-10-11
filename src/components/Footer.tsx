@@ -13,10 +13,10 @@ export default function Footer() {
           {/* Brand info */}
           <div className="md:col-span-2 space-y-4">
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/30">
-                <Shield className="w-4 h-4 text-cyan-400" />
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-900 border border-cyan-500/30 overflow-hidden shadow-sm">
+                <img src="/logo.png" alt="LexiGuard AI" className="w-full h-full object-cover" />
               </div>
-              <span className="font-bold text-base text-white">
+              <span className="font-black text-base text-white">
                 LexiGuard<span className="text-cyan-400">.AI</span>
               </span>
             </div>

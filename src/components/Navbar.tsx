@@ -45,19 +45,21 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#060913]/85 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#060913]/90 backdrop-blur-xl">
+        <div className="w-full px-4 sm:px-8 lg:px-12 h-20 flex items-center justify-between">
           
           {/* Brand Logo */}
           <Link href="/" className="flex items-center gap-3.5 group">
-            <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500/20 via-blue-500/10 to-purple-500/20 border border-cyan-500/30 group-hover:border-cyan-400/60 transition-all shadow-[0_0_20px_-3px_rgba(6,182,212,0.3)]">
-              <ShieldCheck className="w-6 h-6 text-cyan-400 group-hover:scale-110 transition-transform" />
-              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400" />
+            <div className="relative flex items-center justify-center w-11 h-11 rounded-2xl bg-slate-900 border border-cyan-500/40 group-hover:border-cyan-400 transition-all overflow-hidden shadow-[0_0_25px_-5px_rgba(6,182,212,0.5)]">
+              <img
+                src="/logo.png"
+                alt="LexiGuard AI"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-xl tracking-tight text-white group-hover:text-cyan-300 transition-colors">
+                <span className="font-black text-xl tracking-tight text-white group-hover:text-cyan-300 transition-colors">
                   LexiGuard<span className="text-cyan-400">.AI</span>
                 </span>
                 <span className="px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-300 border border-cyan-500/30">
@@ -68,7 +70,7 @@ export default function Navbar() {
             </div>
           </Link>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (Customer & Judge Facing) */}
           <nav className="hidden md:flex items-center gap-1.5 lg:gap-2 bg-slate-900/60 border border-white/5 p-1.5 rounded-2xl">
             <Link
               href="/"
@@ -94,13 +96,6 @@ export default function Navbar() {
               className="px-3.5 py-2 text-sm font-medium text-slate-300 hover:text-white rounded-xl hover:bg-white/5 transition-all"
             >
               Contractors
-            </Link>
-            <Link
-              href="/admin"
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/20 transition-all"
-            >
-              <Lock className="w-3 h-3 text-purple-400" />
-              Admin Hub
             </Link>
           </nav>
 

@@ -31,6 +31,12 @@ export const metadata: Metadata = {
     description:
       "Audit contracts with AI, detect predatory clauses, and notarize tamper-proof legal hashes directly to the blockchain.",
     type: "website",
+    images: [{ url: "/logo.png", width: 512, height: 512, alt: "LexiGuard AI Logo" }],
+  },
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/logo.png",
   },
 };
 
