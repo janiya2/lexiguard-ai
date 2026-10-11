@@ -829,9 +829,18 @@ function generateSmartHeuristicLegalAnswer(
     qLower.includes("mokakda") ||
     qLower.includes("puluwanda") ||
     qLower.includes("wada karanne") ||
-    qLower.includes("kiyanna");
+    qLower.includes("kiyanna") ||
+    qLower.includes("meken");
 
-  // 1. GREETINGS (hi, hello, hey, etc.)
+  const isNonLegalDoc =
+    contractTitle?.toLowerCase().includes("boardroom") ||
+    contractTitle?.toLowerCase().includes("dusk") ||
+    contractTitle?.toLowerCase().includes("photo") ||
+    contractTitle?.toLowerCase().includes("image") ||
+    contractTitle?.toLowerCase().includes("wallpaper") ||
+    (!contractText || contractText.trim().length === 0);
+
+  // 1. GREETINGS & INTRODUCTIONS (hi, hello, hey, how are you, etc.)
   const isGreeting =
     qLower === "hi" ||
     qLower === "hello" ||
@@ -839,122 +848,148 @@ function generateSmartHeuristicLegalAnswer(
     qLower.startsWith("hi ") ||
     qLower.startsWith("hello ") ||
     qLower.startsWith("hey ") ||
+    qLower.includes("how are you") ||
     qLower.includes("good morning") ||
     qLower.includes("good evening") ||
     qLower.includes("good afternoon") ||
     qLower === "halo" ||
     qLower === "ayubowan" ||
-    qLower === "කොහොමද" ||
-    qLower.includes("ආයුබෝවන්");
+    qLower.includes("කොහොමද") ||
+    qLower.includes("ආයුබෝවන්") ||
+    qLower === "sup" ||
+    qLower === "yo";
 
   if (isGreeting) {
     if (isSinhala) {
       return `👋 **ආයුබෝවන්! මම LexiGuard AI Legal Co-Pilot.**
-මම ඔබගේ නීතිමය ගිවිසුම් (Legal Contracts) පරීක්ෂා කර, සැඟවුණු අවාසිදායක කොන්දේසි හඳුනාගෙන උපදෙස් ලබා දෙන නීති උපදේශක AI සහයකයෙක් වෙමි.
 
-**ඔබට මාගෙන් මෙවැනි දේ විමසිය හැක:**
-* 🔍 **අවදානම් විශ්ලේෂණය:** *"මේ ගිවිසුමේ ඇති ප්‍රධාන අවදානම් මොනවාද?"*
+මම ඔබගේ නීතිමය ගිවිසුම් (Contracts & Agreements) පරීක්ෂා කර, ඔබට අවාසිදායක සැඟවුණු නීතිමය උගුල් (Predatory Clauses) හඳුනාගෙන, සාධාරණ නීතිමය ආරක්ෂාවක් සලසන AI සහයකයා වෙමි.
+
+${
+  isNonLegalDoc
+    ? `> 💡 **සටහන:** ඔබ දැනට තෝරාගෙන ඇත්තේ පින්තූරයක් (**${contractTitle || "Image"}**). සැබෑ ගිවිසුමක් පරීක්ෂා කිරීමට ඉහත **"10 Test Contracts Suite"** මඟින් සැබෑ ගිවිසුමක් තෝරාගන්න හෝ PDF/Text ගොනුවක් upload කරන්න.`
+    : ""
+}
+
+**ඔබට අවශ්‍ය ඕනෑම දෙයක් මාගෙන් විමසිය හැක:**
+* 🔍 **අවදානම් සොයන්න:** *"මේ ගිවිසුමේ ඇති ප්‍රධාන නීතිමය අවදානම් මොනවාද?"*
 * ⚖️ **ගිවිසුම අවසන් කිරීම:** *"වැඩ කළ මුදල් නොගෙවා Client ට ගිවිසුම අවසන් කළ හැකිද?"*
-* 🛡️ **වගකීම් සීමාව:** *"මගේ වගකීම් සීමාව (Liability Cap) කොතරම්ද?"*
-* ⚙️ **ක්‍රියාකාරී පියවර:** *"LexiGuard ක්‍රියාත්මක වන ආකාරය (Working Process) පැහැදිලි කරන්න"*
-* ✉️ **සාකච්ඡා ඊමේල්:** *"Client ට යැවීමට සංශෝධිත ඊමේල් කෙටුම්පතක් ලියන්න"*
+* 🛡️ **වගකීම් සීමාව:** *"මගේ Liability Cap එක කොපමණ විය යුතුද?"*
+* ⚙️ **ක්‍රියාකාරී පියවර:** *"LexiGuard ක්‍රියාත්මක වන සම්පූර්ණ පියවර (Working Process) පැහැදිලි කරන්න"*
+* ✉️ **සාකච්ඡා ඊමේල්:** *"Client ට යැවීමට සංශෝධිත counter-proposal ඊමේල් එකක් ලියන්න"*
 
-ඔබට අවශ්‍ය ඕනෑම ප්‍රශ්නයක් සිංහලෙන් හෝ ඉංග්‍රීසියෙන් විමසන්න!`;
+ඔබට දැනගැනීමට අවශ්‍ය ඕනෑම දෙයක් සිංහලෙන් හෝ ඉංග්‍රීසියෙන් විමසන්න!`;
     }
 
-    return `👋 **Hello! I am LexiGuard AI Counsel & Legal Co-Pilot.**
-I am an intelligent legal assistant built for the Blockchain Legal Institute (BLI) Hackathon to protect contractors, freelancers, and businesses from one-sided, predatory contracts.
+    return `👋 **Hello! I am your LexiGuard AI Legal Co-Pilot.**
 
-**Here is how I can assist you right now:**
-* 🔍 **Analyze Risks:** Ask *"What are the biggest traps in this agreement?"*
-* ⚖️ **Termination Rights:** Ask *"Can the client terminate without paying for work done?"*
-* 🛡️ **Liability Limits:** Ask *"What is my indemnification and liability cap?"*
-* ⚙️ **Platform Workflow:** Ask *"Can you tell me the working process?"*
-* ✉️ **Negotiation Counter-Offer:** Ask *"Draft a polite negotiation email to the client"*
+I am an intelligent legal counsel assistant designed for the Blockchain Legal Institute (BLI) Hackathon. I specialize in parsing legal contracts, spotting asymmetric liabilities, and crafting protective counter-proposals for freelancers, agencies, and web3 builders.
 
-Feel free to ask me anything about your current document or contract terms!`;
+${
+  isNonLegalDoc
+    ? `> 💡 **Quick Note:** The currently active document appears to be an image (**${contractTitle || "Image"}**) rather than written contract terms. To see me audit live contract clauses in real time, you can pick any agreement from the **10 Test Contracts Suite** in the studio above, or upload a contract PDF/DOCX!`
+    : ""
+}
+
+**Here are a few things you can ask me right now:**
+* 🔍 **Risk Check:** *"What are the most dangerous terms in this contract?"*
+* ⚖️ **Exit Rights:** *"Can the client terminate without paying for milestones completed?"*
+* 🛡️ **Liability Limits:** *"What is a fair liability cap for software contractors?"*
+* ⚙️ **System Workflow:** *"How does this work?"* or *"Explain the working process"*
+* ✉️ **Negotiation Drafts:** *"Draft a polite pushback email to the client"*
+
+How can I help you protect your rights today?`;
   }
 
-  // 2. WORKING PROCESS & SYSTEM WORKFLOW
+  // 2. WORKING PROCESS, HOW DOES THIS WORK, WORKFLOW, HOW TO USE
   const isWorkflow =
-    qLower.includes("working process") ||
-    qLower.includes("work process") ||
+    qLower.includes("how to this working") ||
+    qLower.includes("how this work") ||
     qLower.includes("how does this work") ||
     qLower.includes("how it works") ||
-    qLower.includes("explain process") ||
-    qLower.includes("how to use") ||
-    qLower.includes("steps") ||
+    qLower.includes("how it work") ||
+    (qLower.includes("how") &&
+      (qLower.includes("work") ||
+        qLower.includes("working") ||
+        qLower.includes("use") ||
+        qLower.includes("function") ||
+        qLower.includes("run") ||
+        qLower.includes("start"))) ||
+    qLower.includes("working process") ||
+    qLower.includes("work process") ||
+    qLower.includes("process") ||
     qLower.includes("workflow") ||
+    qLower.includes("steps") ||
     qLower.includes("system process") ||
     qLower.includes("what does this do") ||
     qLower.includes("wada karanne") ||
     qLower.includes("ක්‍රියාවලිය") ||
-    qLower.includes("meken wenne");
+    qLower.includes("meken wenne") ||
+    qLower.includes("kohomada");
 
   if (isWorkflow) {
     if (isSinhala) {
-      return `⚙️ **LexiGuard AI ක්‍රියාකාරී පියවර (Working Process & Workflow):**
+      return `⚙️ **LexiGuard AI ක්‍රියාකාරී පියවර (End-to-End Working Process):**
 
-LexiGuard AI ඔබගේ නීතිමය ගිවිසුම් ආරම්භයේ සිට අවසානය දක්වා පූර්ණ ආරක්ෂාවක් සහිතව පරීක්ෂා කරන ආකාරය මෙන්න:
+LexiGuard AI ක්‍රියාත්මක වන්නේ සැබෑ ලෝකයේ Freelancers, Contractors සහ Businesses මුහුණ දෙන නීතිමය ගැටලුවලට විසඳුම් ලබා දෙන පියවර 5ක් ඔස්සේය:
 
-1. **📄 1. Document Upload & Multimodal Extraction (ලේඛන උඩුගත කිරීම):**
-   - PDF, DOCX, Images (PNG/JPG), හෝ Text ගොනු ලෙස ගිවිසුම උඩුගත කළ හැක.
-   - ලේඛනය ආරක්ෂිතව **Firebase Cloud Vault** හි ගබඩා වේ.
-   - Google Gemini AI මඟින් ලේඛනය සැබෑ නීතිමය ගිවිසුමක්දැයි තහවුරු කර පෙළ හඳුනා ගනී (OCR).
+1. **📄 1. Document Upload & Multimodal Extraction (ලේඛනය උඩුගත කිරීම):**
+   - ඔබගේ ගිවිසුම PDF, DOCX, Image (PNG/JPG), හෝ Plain Text ලෙස උඩුගත කළ හැක.
+   - ලේඛන ආරක්ෂිතව **Firebase Cloud Vault** හි ගබඩා වන අතර, Google Gemini AI Vision මඟින් ලේඛනය සැබෑ නීතිමය ගිවිසුමක්දැයි තහවුරු කර පෙළ නිවැරදිව හඳුනා ගනී.
 
-2. **🧠 2. AI Legal Risk Audit (කෘතිම බුද්ධි අවදානම් විගණනය):**
-   - අපගේ AI මාදිලිය මඟින් අවදානම් කාණ්ඩ 6ක් (Liability, Termination, Payment, IP Rights, Jurisdiction, Confidentiality) පරීක්ෂා කරයි.
-   - ගිවිසුමට ලකුණු (Compliance Score 0-100) ලබා දී අනතුරුදායක කොන්දේසි රතු පැහැයෙන් (Critical Risks) පෙන්වයි.
+2. **🧠 2. Autonomous Legal Risk Audit (කෘතිම බුද්ධි අවදානම් විගණනය):**
+   - අපගේ AI මාදිලිය මඟින් ප්‍රධාන නීතිමය කාණ්ඩ 6ක් (Liability, Termination, Payment Holdbacks, IP Ownership, Jurisdiction, Confidentiality) ක්ෂණිකව පරීක්ෂා කරයි.
+   - ගිවිසුමට ලකුණු (0 - 100 Health Score) ලබා දී අසාධාරණ කොන්දේසි රතු පැහැයෙන් පෙන්වයි.
 
-3. **✏️ 3. Clause-by-Clause Redlines (නීතිමය විසඳුම් හා සංශෝධන):**
-   - අසාධාරණ කොන්දේසි වෙනුවට ජාත්‍යන්තර සම්මුතීන්ට අනුකූල සාධාරණ ප්‍රති-කොන්දේසි (Balanced Redlines) AI විසින් නිර්දේශ කරයි.
-   - සංශෝධිත සම්පූර්ණ ගිවිසුම **Microsoft Word (.doc)** ලෙස බාගත (Download) කරගත හැක.
+3. **✏️ 3. Clause-by-Clause Balanced Redlines (නීතිමය සංශෝධන):**
+   - සැඟවුණු අවාසිදායක කොන්දේසි වෙනුවට ජාත්‍යන්තර B2B ප්‍රමිතීන්ට අනුකූල සාධාරණ ප්‍රති-කොන්දේසි (Balanced Redlines) AI විසින් නිර්දේශ කරයි.
+   - සංශෝධිත සම්පූර්ණ ගිවිසුම **Microsoft Word (.doc)** ලේඛනයක් ලෙස පහසුවෙන්ම බාගත කළ හැක.
 
-4. **⛓️ 4. Base Sepolia On-Chain Notarization (බ්ලොක්චේන් සත්‍යාපනය):**
-   - ගිවිසුමේ SHA-256 ඩිජිටල් මුද්‍රාව (Cryptographic Hash) **Base Sepolia (Ethereum L2)** බ්ලොක්චේන් මත සදාකාලිකව ලියාපදිංචි කරයි.
-   - BaseScan ගවේෂකය හරහා ඕනෑම අයෙකුට ගිවිසුමේ නිරවද්‍යතාවය සහ කාලය සත්‍යාපනය කළ හැක.
+4. **⛓️ 4. Base Sepolia On-Chain Notarization (බ්ලොක්චේන් මුද්‍රාව):**
+   - ගිවිසුමේ SHA-256 ඩිජිටල් මුද්‍රාව (Cryptographic Hash) **Base Sepolia (Coinbase Ethereum L2)** බ්ලොක්චේන් මත සදාකාලිකව සටහන් කරයි.
+   - [BaseScan Explorer](https://sepolia.basescan.org) හරහා ඕනෑම පාර්ශවයකට ගිවිසුම වෙනස් කර නැති බවට (Tamper-Proof Proof of Existence) සත්‍යාපනය කළ හැක.
 
 5. **🔒 5. Smart Escrow Vault (විකේන්ද්‍රීය ගෙවීම් සුරක්ෂිතතාව):**
-   - වැඩ ආරම්භ කිරීමට පෙර මුදල් Escrow Smart Contract එකෙහි තැන්පත් කර, වැඩ නිමවූ පසු ස්වයංක්‍රීයව ගෙවීම් ලබා ගැනීමේ පහසුකම ලබා දෙයි.
+   - වැඩ ආරම්භ කිරීමට පෙර අදාළ මුදල Escrow Smart Contract එකෙහි තැන්පත් කර, නියමිත වැඩ නිමවූ පසු ස්වයංක්‍රීයව ගෙවීම් නිදහස් කිරීමට පහසුකම් සලසයි.
 
-ඔබගේ වත්මන් ගිවිසුම ගැන යමක් විමසීමට අවශ්‍යද?`;
+ඔබට ගිවිසුමක යම් නිශ්චිත කොන්දේසියක් ගැන දැනගැනීමට අවශ්‍යද?`;
     }
 
-    return `⚙️ **LexiGuard AI End-to-End Working Process & System Architecture:**
+    return `⚙️ **How LexiGuard AI Works — End-to-End Platform Architecture:**
 
-LexiGuard AI combines multimodal Generative AI with Ethereum Layer-2 Cryptographic Proofs across 5 streamlined stages:
+LexiGuard bridges Generative AI with Ethereum Layer-2 Cryptographic Notarization to protect you across 5 automated stages:
 
 1. **📄 1. Document Ingestion & Multimodal OCR:**
    - Upload any contract as a **PDF**, **DOCX**, **Image (PNG/JPG)**, or **Plain Text**.
-   - Encrypted and archived securely in the **Firebase Cloud Vault**.
-   - Gemini Multimodal Vision verifies document authenticity and extracts text without hallucination.
+   - Your files are encrypted and preserved in our **Firebase Cloud Vault**.
+   - Multimodal Vision OCR extracts authentic contract clauses and rejects non-legal files.
 
-2. **🧠 2. AI Legal Risk Audit & Scoring:**
-   - Evaluates 6 critical legal pillars:
-     - **Liability & Indemnity** (checks for uncapped unilateral liability traps)
-     - **Termination Rights** (flags immediate termination without compensation)
-     - **Payment & Net Terms** (identifies predatory holdbacks and Net 90 delays)
-     - **Intellectual Property** (preserves your pre-existing tools and starter kits)
-     - **Governing Law & Jurisdiction** (highlights foreign court disadvantages)
-     - **Confidentiality Scope** (ensures reasonable, mutual non-disclosure periods)
-   - Assigns a transparent Contract Health Score from 0 to 100.
+2. **🧠 2. Autonomous Legal Risk Audit:**
+   - The AI scrutinizes 6 critical liability dimensions:
+     - **Uncapped Indemnity:** Flags clauses where you bear infinite financial damages.
+     - **Termination Without Pay:** Warns against immediate firing with zero pay for work done.
+     - **Predatory Holdbacks:** Spots Net 90 payment delays and subjective approval traps.
+     - **IP Overreach:** Protects your pre-existing tools, libraries, and frameworks.
+     - **Jurisdiction Traps:** Flags hostile foreign court requirements.
+     - **Confidentiality Scope:** Enforces reasonable mutual non-disclosure periods.
+   - Outputs a transparent **Health Score (0-100)** and risk breakdown.
 
-3. **✏️ 3. Clause-by-Clause Redlining & Word Export:**
-   - Generates lawyer-grade, reciprocal replacement terms for every high-risk clause.
-   - One-click export to an official, formatted **Microsoft Word (.doc)** document for instant signing.
+3. **✏️ 3. Lawyer-Grade Clause Redlines & Word Export:**
+   - For every flagged clause, the AI suggests balanced, reciprocal replacement language.
+   - One-click export to an official, formatted **Microsoft Word (.doc)** contract ready for client sign-off.
 
-4. **⛓️ 4. Base Sepolia On-Chain Notarization:**
-   - Calculates a deterministic SHA-256 digital fingerprint of the agreed terms.
-   - Broadcasts a transaction to the **Base Sepolia (Ethereum L2)** blockchain.
-   - Produces an immutable, verifiable public record on BaseScan and a downloadable tamper-proof Certificate of Notarization.
+4. **⛓️ 4. On-Chain Notarization on Base Sepolia:**
+   - Computes a deterministic SHA-256 cryptographic fingerprint of the exact contract text.
+   - Mints an immutable Proof-of-Existence on the **Base Sepolia (Coinbase Ethereum L2)** blockchain.
+   - Anyone can verify the timestamp and unaltered state directly on [BaseScan Sepolia](https://sepolia.basescan.org).
 
 5. **🔒 5. Smart Escrow & Payment Vault:**
-   - Integrates with decentralized milestone escrow so client funds are locked upfront before work begins, releasing upon milestone approval.
+   - Eliminates client non-payment by locking milestone funds into an on-chain escrow smart contract before development begins, releasing funds upon milestone approval.
 
-Would you like me to inspect any clause in your active document?`;
+Would you like me to inspect any specific clause in your current document?`;
   }
 
-  // 3. BLOCKCHAIN & NOTARIZATION
+  // 3. BLOCKCHAIN & NOTARIZATION QUESTIONS
   if (
     qLower.includes("notariz") ||
     qLower.includes("blockchain") ||
@@ -966,12 +1001,13 @@ Would you like me to inspect any clause in your active document?`;
     qLower.includes("hash")
   ) {
     return `⛓️ **On-Chain Legal Notarization on Base Sepolia:**
-* **How It Works:** LexiGuard AI computes a cryptographic SHA-256 hash of the exact contract text. This unique hash is recorded into our smart contract on **Base Sepolia (Coinbase Ethereum L2)**.
+
+* **How It Works:** LexiGuard AI computes a cryptographic SHA-256 hash of the exact contract text. This unique fingerprint is broadcast to the **Base Sepolia (Coinbase Ethereum L2)** smart contract.
 * **Why It Matters:** 
-  1. **Proof of Existence:** Proves this exact version of the contract existed at this exact timestamp.
-  2. **Tamper Proof:** If either party alters even a single comma later, the cryptographic hash will change, immediately exposing the tampering.
-  3. **Admissible Evidence:** Under ESIGN Act and international electronic evidence standards, cryptographic timestamp proofs provide strong legal evidentiary value.
-* **Verification:** Every notarization produces a permanent transaction hash on [BaseScan Sepolia](https://sepolia.basescan.org) with an immutable block timestamp.`;
+  1. **Immutable Proof of Existence:** Proves this exact version of the contract was agreed upon at this exact block timestamp.
+  2. **Tamper Proof:** If either party changes a single comma or percentage later, the cryptographic hash changes, immediately exposing the alteration.
+  3. **Admissible Electronic Evidence:** Under the US ESIGN Act and international electronic evidence standards, cryptographic timestamp proofs provide authoritative legal weight in dispute resolution.
+* **Explorer Verification:** Every notarization produces a permanent transaction hash on [BaseScan Sepolia](https://sepolia.basescan.org) with an immutable block confirmation.`;
   }
 
   // 4. ESCROW & WALLET PAYMENTS
@@ -985,41 +1021,46 @@ Would you like me to inspect any clause in your active document?`;
     qLower.includes("token")
   ) {
     return `🔒 **Smart Contract Escrow & Payment Protection:**
+
 * **The Problem:** Freelancers and agencies routinely face clients who delay invoices, demand free scope creep, or ghost after delivery.
 * **The Solution:** LexiGuard's Escrow Vault locks the agreed milestone funds in an on-chain smart contract before any work starts.
 * **Release Mechanism:**
-  - Upon milestone delivery and mutual sign-off, funds are released directly to the contractor's wallet.
+  - Upon milestone delivery and client sign-off, funds release automatically to your wallet.
   - In case of dispute, BLI arbitration can review the notarized contract hash to execute fair payout.
 * **Credits:** Audits require 1 audit credit (free test credits are provided on connect). You can top up anytime via your connected Web3 wallet.`;
   }
 
-  // 5. TERMINATION & EXIT
+  // 5. TERMINATION & EXIT RIGHTS
   if (
     qLower.includes("terminat") ||
     qLower.includes("cancel") ||
     qLower.includes("fire") ||
     qLower.includes("exit") ||
     qLower.includes("end agreement") ||
+    qLower.includes("without pay") ||
     qLower.includes("අවසන්")
   ) {
     if (isSinhala) {
       return `📌 **ගිවිසුම අවසන් කිරීම (Termination Risk Analysis):**
-* **වත්මන් තත්ත්වය:** මෙම ගිවිසුමේ පාරිභෝගිකයාට (Client) ඕනෑම මොහොතක කිසිදු පූර්ව දැනුම්දීමකින් තොරව (without cause/notice) ගිවිසුම අවසන් කිරීමට ඉඩ ලබා දී තිබිය හැක.
-* **ප්‍රධාන අවදානම:** මේ වන විට නිම කළ වැඩ කොටස් (in-progress milestones) සඳහා මුදල් නොගෙවා සිටීමට Client ට ඇති හැකියාවයි.
+
+* **ප්‍රධාන අවදානම:** පාරිභෝගිකයාට (Client) ඕනෑම මොහොතක කිසිදු පූර්ව දැනුම්දීමකින් තොරව (without cause/notice) ගිවිසුම අවසන් කිරීමටත්, නිම කළ වැඩ කොටස් සඳහා මුදල් නොගෙවා සිටීමටත් ඉඩ ලබා දෙන කොන්දේසි අසාධාරණයි.
+* **නීතිමය ආරක්ෂාව:**
+  - දෙපාර්ශවයටම අවම වශයෙන් දින 14 ක ලිඛිත පූර්ව දැනුම්දීමක් (14 days written notice) අවශ්‍ය විය යුතුය.
+  - දැනුම්දීම දක්වා නිම කළ සියලුම සේවාවන් සඳහා සම්පූර්ණ ගෙවීම් (Pro-rata compensation) කළ යුතුය.
 * **නිර්දේශිත සංශෝධනය (Redline):**
-  > "දෙපාර්ශවයටම අවම වශයෙන් දින 14 ක ලිඛිත පූර්ව දැනුම්දීමක් (14 days written notice) අවශ්‍ය වන අතර, දැනුම්දීම දක්වා නිම කළ සියලුම සේවාවන් සඳහා සම්පූර්ණ ගෙවීම් කළ යුතුය."`;
+  > *"Either party may terminate this Agreement upon fourteen (14) calendar days written notice. Client shall pay Contractor for all milestones completed up to the effective termination date."*`;
     }
 
     return `⚖️ **Termination & Exit Rights Assessment:**
-Based on your contract analysis for **${contractTitle || "this agreement"}**:
-* **Current Risk Identified:** The clause grants the client immediate termination for convenience without notice, with language that may excuse them from paying for in-progress deliverables.
-* **Legal Exposure:** If the client decides to pivot or cancel, you risk uncompensated labor and immediate revenue cutoff.
-* **Recommended Counter-Term (Redline):**
-  > *"Either party may terminate this Agreement upon fourteen (14) calendar days written notice. In the event of termination for convenience, Client shall promptly pay Contractor for all milestones completed and billable hours incurred up to the effective termination date."*
-* **Negotiation Tip:** Request mutual notice periods and a kill-fee (e.g. 25% of the remaining milestone value) if terminated without cause.`;
+
+* **The Predatory Clause:** Many client contracts include "termination for convenience immediately without notice" coupled with terms that excuse them from paying for in-progress milestones.
+* **Your Legal Exposure:** If the client pivots or cancels, you risk zero compensation for billable hours already spent.
+* **Standard Commercial Counter-Term (Redline):**
+  > *"Either party may terminate this Agreement upon fourteen (14) calendar days advance written notice. In the event of early termination for convenience, Client shall promptly pay Contractor for all milestones completed and billable hours incurred up to the effective termination date."*
+* **Negotiation Tip:** Always insist on reciprocal notice and a kill-fee (e.g. 25% of the remaining milestone value) if terminated without cause.`;
   }
 
-  // 6. INDEMNITY & LIABILITY
+  // 6. INDEMNITY & LIABILITY CAPS
   if (
     qLower.includes("liab") ||
     qLower.includes("indemn") ||
@@ -1029,18 +1070,21 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
   ) {
     if (isSinhala) {
       return `🛡️ **වගකීම් සහ වන්දි ගෙවීම් (Liability & Indemnification):**
-* **හඳුනාගත් අවදානම:** කොන්ත්‍රාත්කරුට (Contractor) සීමාවක් නොමැතිව (Unlimited Unilateral Indemnity) සියලුම පාඩු සහ නීති ගාස්තු සඳහා වගකීම පවරා ඇත.
-* **සාමාන්‍ය වෙළඳ නීති සම්මුතිය:** B2B හෝ Freelance ගිවිසුම් වලදී වගකීම සැමවිටම පසුගිය මාස 12 තුළ ගෙවූ සම්පූර්ණ මුදලට (Fees paid under the contract) සීමා විය යුතුය.
-* **නිර්දේශය:** "Total aggregate liability shall not exceed fees paid under this agreement" යන කොන්දේසිය එක් කරන ලෙස ඉල්ලා සිටින්න.`;
+
+* **හඳුනාගත් අවදානම:** කොන්ත්‍රාත්කරුට (Contractor) සීමාවක් නොමැතිව (Unlimited Unilateral Indemnity) සියලුම පාඩු සහ නීති ගාස්තු සඳහා වගකීම පැවරීම බරපතල අවාසියකි.
+* **සාමාන්‍ය වෙළඳ නීති සම්මුතිය:** B2B හෝ Freelance ගිවිසුම් වලදී වගකීම සැමවිටම පසුගිය මාස 6-12 තුළ ගෙවූ සම්පූර්ණ මුදලට (Fees paid under this agreement) සීමා විය යුතුය.
+* **නිර්දේශිත සංශෝධනය (Redline):**
+  > *"Contractor's aggregate liability under this Agreement shall be capped strictly at the total fees paid under this Statement of Work."*`;
     }
 
-    return `🛡️ **Liability Cap & Indemnification Risk:**
-* **Critical Trap:** Uncapped indemnification exposes your business assets to unlimited claims, including third-party software dependencies, accidental bugs, or client delays.
-* **Standard Commercial Standard:** Under US Commercial Code and UK Common Law, reasonable contractor liability is strictly capped at either:
-  1. **1x to 2x Total Fees Paid** under the Statement of Work, or
+    return `🛡️ **Liability Cap & Indemnification Risk Analysis:**
+
+* **Critical Trap:** Uncapped indemnification exposes your business and personal assets to unlimited claims, including third-party software dependencies, accidental bugs, or client delays.
+* **Standard Commercial Standard:** Under US Commercial Code and international contract practice, reasonable contractor liability is strictly capped at either:
+  1. **1x Total Fees Paid** under the Statement of Work, or
   2. The policy limit of your professional indemnity insurance.
-* **Recommended Counter-Proposal:**
-  > *"Except for gross negligence or willful misconduct, Contractor's aggregate liability under this Agreement shall be capped at the total fees actually received by Contractor during the preceding six (6) months."*`;
+* **Recommended Counter-Proposal (Redline):**
+  > *"Except for gross negligence or willful misconduct, Contractor's aggregate liability arising out of or related to this Agreement shall be capped at the total fees actually received by Contractor under this Statement of Work during the preceding six (6) months."*`;
   }
 
   // 7. PAYMENT, NET DAYS, HOLDBACKS & ESCROW
@@ -1049,14 +1093,15 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
     qLower.includes("money") ||
     qLower.includes("holdback") ||
     qLower.includes("net") ||
-    qLower.includes("escrow") ||
     qLower.includes("ගෙවීම්")
   ) {
     return `💰 **Payment Terms & Cash Flow Safety Analysis:**
-* **Payment Terms Warning:** Net 60 or Net 90 payment terms combined with subjective satisfaction clauses or 30% retention holdbacks create severe counterparty risk.
-* **On-Chain Escrow Advantage:** With LexiGuard's Base Sepolia Escrow Vault, funds can be locked upfront before you write a single line of code, releasing automatically upon verifiable cryptographic proof of delivery.
+
+* **Payment Traps:** Net 60 or Net 90 payment terms combined with subjective "satisfaction" clauses or 20-30% retention holdbacks create severe counterparty credit risk.
+* **Standard Industry Benchmark:** Standard consulting terms are **Net 15 business days** upon verified milestone delivery.
 * **Recommended Clause Revision:**
-  > *"Invoices shall be payable within Net 15 business days. In the event of an undisputed milestone, payments delayed beyond thirty (30) days shall accrue interest at 1.5% per month."*`;
+  > *"Invoices shall be payable within Net 15 business days. In the event of an undisputed milestone, payments delayed beyond thirty (30) days shall accrue interest at 1.5% per month."*
+* **On-Chain Escrow Advantage:** With LexiGuard's Base Sepolia Escrow Vault, milestone funds are locked upfront before you write a single line of code, releasing automatically upon verified delivery.`;
   }
 
   // 8. IP & WORK FOR HIRE
@@ -1069,10 +1114,11 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
     qLower.includes("හිමිකම්")
   ) {
     return `💻 **Intellectual Property (IP) Transfer Scope:**
-* **Overbroad Assignment Flag:** The draft clause attempts to seize "all methodologies, general knowledge, and pre-existing frameworks".
-* **Safeguard Your Tools:** You must explicitly preserve your pre-existing code libraries, starter kits, and proprietary methodologies.
+
+* **Overbroad Assignment Flag:** Beware of clauses that seize "all methodologies, general knowledge, pre-existing code, and starter kits" developed before or during the engagement.
+* **Safeguard Your Tools:** You must explicitly carve out pre-existing contractor intellectual property.
 * **Protective Redline:**
-  > *"Contractor assigns ownership of bespoke custom deliverables upon full and final payment. Pre-existing contractor intellectual property and general development tools remain solely owned by Contractor, subject to a perpetual, non-exclusive license to Client."*`;
+  > *"Contractor assigns ownership of bespoke custom deliverables upon full and final payment. Pre-existing contractor intellectual property, starter libraries, and general development tools remain solely owned by Contractor, subject to a perpetual, non-exclusive license to Client."*`;
   }
 
   // 9. DRAFTING A NEGOTIATION EMAIL
@@ -1089,30 +1135,56 @@ Based on your contract analysis for **${contractTitle || "this agreement"}**:
 
 *Hi [Client Name],*
 
-*Thank you for sharing the draft agreement! We are excited to collaborate and achieve all milestones.*
+*Thank you for sharing the draft agreement! We are very excited to collaborate and achieve all project milestones.*
 
 *Upon review with our automated compliance system, our team flagged 3 standard revisions to align the contract with mutual industry standards:*
 
 1. **Liability Cap:** Limiting aggregate liability to total fees paid under this Statement of Work.
-2. **Payment Timeline:** Clarifying payment within Net 15 days of verified delivery.
+2. **Payment Timeline:** Clarifying payment within Net 15 days of verified milestone handover.
 3. **Mutual Notice:** Introducing a reciprocal 14-day notice period for any termination for convenience.
 
-*I have attached our amended redline document for your legal team's quick sign-off. Please let us know if you'd like a quick 5-minute call to finalize.*
+*I have attached our amended redline document for your legal team's quick review. Please let us know if you'd like a quick 5-minute call to finalize.*
 
 *Best regards,*  
 *[Your Name]*`;
   }
 
-  // 10. GENERAL / SUMMARY
-  return `🤖 **LexiGuard AI Counsel Evaluation:**
-Regarding **"${question}"** for **${contractTitle || "this contract"}**:
+  // 10. DYNAMIC CONVERSATIONAL GUIDANCE (NATURAL HUMAN-LIKE REASONING)
+  if (isSinhala) {
+    return `💡 **LexiGuard AI නීති උපදේශක ඇගයීම:**
 
-* **Contract Status:** ${auditReport ? `Compliance Score is **${auditReport.overallScore}/100** with **${auditReport.criticalRisksCount} critical flags** detected.` : "Active contract loaded in session memory."}
-* **Governing Law Context:** ${auditReport?.governingLaw || "Delaware / Standard Commercial Law"}.
-* **Actionable Guidance:**
-  - Always demand bilateral reciprocity: any right granted to the client (termination, indemnification, audit rights) should have an equivalent balance protecting the contractor.
-  - Anchor finalized agreement hashes on Base Sepolia using our **Notarize On-Chain** feature to establish immutable, tamper-proof proof of agreed terms.
+ඔබ විමසූ **"${question}"** සම්බන්ධයෙන් මගේ සෘජු නීතිමය උපදෙස මෙන්න:
 
-*Feel free to ask me to draft a counter-clause, explain any specific paragraph, or tell you more about the working process!*`;
+* **මූලික නීතිමය මූලධර්මය:** වාණිජ ගිවිසුම් වලදී (B2B / Freelance) සැමවිටම දෙපාර්ශවයටම සාධාරණ සමාන අයිතිවාසිකම් (Bilateral Reciprocity) තිබිය යුතුය. Client ට හිමිවන ඕනෑම අයිතියකට (ගිවිසුම අවසන් කිරීම, වන්දි ලබා ගැනීම) සාධාරණ සීමාවක් තිබිය යුතුය.
+* **ක්‍රියාත්මක කළ යුතු පියවර:**
+  1. ගිවිසුම අත්සන් කිරීමට පෙර අසාධාරණ කොන්දේසි සඳහා Redlines (ප්‍රති-කොන්දේසි) ඉදිරිපත් කරන්න.
+  2. අපගේ **Notarize On-Chain** පහසුකම මඟින් Base Sepolia බ්ලොක්චේන් මත SHA-256 සත්‍යාපිත සාක්ෂියක් සටහන් කරගන්න.
+
+${
+  isNonLegalDoc
+    ? `\n> 📌 *සටහන: ඔබ දැනට තෝරාගෙන ඇත්තේ පින්තූරයක් (${contractTitle || "File"}). ඉහත ඇති "10 Test Contracts Suite" මඟින් සැබෑ ගිවිසුමක් තෝරා live risk audit එකක් අත්හදා බලන්න!*`
+    : ""
+}
+
+ඔබට නිශ්චිත ඡේදයක් පැහැදිලි කරගැනීමට හෝ Client ට යැවීමට counter-offer ලිපියක් සකස් කරගැනීමට අවශ්‍ය නම් මට කියන්න!`;
+  }
+
+  return `💡 **LexiGuard Legal Counsel Guidance:**
+
+Regarding your inquiry on **"${question}"**:
+
+* **Core Legal Principle:** In modern B2B and freelance commercial law, fairness requires **bilateral reciprocity**. Any unilateral power claimed by a client (such as immediate termination, uncapped indemnity, or subjective payment withholding) must be tempered with reciprocal protections for the service provider.
+* **Key Recommendations:**
+  1. **Demand Mutual Terms:** Limit your aggregate financial liability to total fees received under the project Statement of Work.
+  2. **Protect Cash Flow:** Require minimum 14-day advance notice for termination for convenience, guaranteeing pro-rata compensation for all work delivered.
+  3. **Anchor On-Chain:** Once agreed, record the SHA-256 cryptographic digest on Base Sepolia using our **Notarize On-Chain** engine to ensure neither party can tamper with terms later.
+
+${
+  isNonLegalDoc
+    ? `\n> 📌 *Tip: You currently have an image/sample loaded (${contractTitle || "Custom File"}). Select any agreement from the **10 Test Contracts Suite** above to inspect live clauses and see real-time redlines!*`
+    : ""
+}
+
+Feel free to ask me to draft a custom counter-clause, explain any tricky wording, or write an email to your client!`;
 }
 

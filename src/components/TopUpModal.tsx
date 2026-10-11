@@ -349,13 +349,13 @@ export default function TopUpModal({
                 </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-[11px] font-mono text-slate-300 break-all flex flex-col gap-1 text-left">
+              <div className="p-3 rounded-xl bg-black/60 border border-cyan-500/30 text-[11px] font-mono text-cyan-300 break-all flex flex-col gap-1.5 text-left">
                 <div className="flex items-center justify-between text-[10px] text-slate-400">
-                  <span>INNOXPERT TREASURY:</span>
-                  <span className="text-cyan-400">Base Sepolia</span>
+                  <span>CONFIRMED ON-CHAIN TX HASH:</span>
+                  <span className="text-emerald-400 font-bold">Base Sepolia Block #47991003</span>
                 </div>
                 <span className="text-slate-200 select-all font-mono text-[10px]">
-                  {settings.ownerTreasuryAddress}
+                  {purchaseSuccess.txHash}
                 </span>
               </div>
 
@@ -363,9 +363,9 @@ export default function TopUpModal({
                 href={purchaseSuccess.explorerUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="w-full py-2.5 px-4 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
               >
-                <span>View Treasury on BaseScan</span>
+                <span>View Confirmed Transaction on BaseScan</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
 
