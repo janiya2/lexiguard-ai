@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { SUPPORTED_NETWORKS, computeSHA256, generateEVMTransactionHash } from "@/lib/web3Service";
+import { syncUserCreditsWithFirestore } from "@/lib/firestoreService";
 
 export interface Web3ContextType {
   account: string | null;
@@ -37,52 +38,89 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [isMetaMaskInstalled, setIsMetaMaskInstalled] = useState(false);
   const [connectionType, setConnectionType] = useState<"metamask" | "gasless_relayer" | null>(null);
 
-  // Check if window.ethereum exists
+  // Check if window.ethereum exists and restore persistent session
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const hasMetaMask = Boolean((window as any).ethereum);
-      setIsMetaMaskInstalled(hasMetaMask);
+    if (typeof window === "undefined") return;
 
-      if (hasMetaMask) {
-        const eth = (window as any).ethereum;
+    const savedType = localStorage.getItem("lexiguard_wallet_type");
+    const savedAddress = localStorage.getItem("lexiguard_wallet_address");
 
-        // Check if already authorized
-        eth.request({ method: "eth_accounts" })
-          .then((accounts: string[]) => {
-            if (accounts && accounts.length > 0) {
-              setAccount(accounts[0]);
-              setConnectionType("metamask");
-              fetchBalance(accounts[0]);
-              fetchChainId();
-            }
-          })
-          .catch(() => {});
+    // 1. Immediately restore state from LocalStorage so there's zero disconnection flicker on refresh
+    if (savedType === "gasless_relayer") {
+      const guestAddress = savedAddress || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
+      setAccount(guestAddress);
+      setBalance("1.8500 Sepolia ETH");
+      setChainId(84532);
+      setNetworkName("Base Sepolia Testnet");
+      setConnectionType("gasless_relayer");
+      syncUserCreditsWithFirestore(guestAddress);
+    } else if (savedType === "metamask" && savedAddress) {
+      setAccount(savedAddress);
+      setConnectionType("metamask");
+      setChainId(84532);
+      setNetworkName("Base Sepolia Testnet");
+      syncUserCreditsWithFirestore(savedAddress);
+    }
 
-        // Listeners for account & network changes
-        const handleAccountsChanged = (accounts: string[]) => {
-          if (accounts.length > 0) {
-            setAccount(accounts[0]);
-            fetchBalance(accounts[0]);
-          } else {
-            disconnect();
-          }
-        };
+    // 2. Setup MetaMask provider detection & authorization check
+    const initMetaMask = async () => {
+      const eth = (window as any).ethereum;
+      if (!eth) return;
+      setIsMetaMaskInstalled(true);
 
-        const handleChainChanged = (newChainIdHex: string) => {
-          const id = parseInt(newChainIdHex, 16);
-          setChainId(id);
-          const found = SUPPORTED_NETWORKS.find((n) => n.chainId === id);
-          setNetworkName(found ? found.name : `EVM Chain ${id}`);
-        };
-
-        eth.on?.("accountsChanged", handleAccountsChanged);
-        eth.on?.("chainChanged", handleChainChanged);
-
-        return () => {
-          eth.removeListener?.("accountsChanged", handleAccountsChanged);
-          eth.removeListener?.("chainChanged", handleChainChanged);
-        };
+      try {
+        const accounts = await eth.request({ method: "eth_accounts" });
+        if (accounts && accounts.length > 0) {
+          const activeAccount = accounts[0];
+          setAccount(activeAccount);
+          setConnectionType("metamask");
+          localStorage.setItem("lexiguard_wallet_type", "metamask");
+          localStorage.setItem("lexiguard_wallet_address", activeAccount);
+          fetchBalance(activeAccount);
+          fetchChainId();
+          syncUserCreditsWithFirestore(activeAccount);
+        } else if (savedType === "metamask" && savedAddress) {
+          fetchBalance(savedAddress);
+        }
+      } catch (err) {
+        console.warn("eth_accounts check error:", err);
       }
+
+      // Event listeners for account & network changes
+      const handleAccountsChanged = (accounts: string[]) => {
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          setConnectionType("metamask");
+          localStorage.setItem("lexiguard_wallet_type", "metamask");
+          localStorage.setItem("lexiguard_wallet_address", accounts[0]);
+          fetchBalance(accounts[0]);
+          syncUserCreditsWithFirestore(accounts[0]);
+        } else {
+          disconnect();
+        }
+      };
+
+      const handleChainChanged = (newChainIdHex: string) => {
+        const id = parseInt(newChainIdHex, 16);
+        setChainId(id);
+        const found = SUPPORTED_NETWORKS.find((n) => n.chainId === id);
+        setNetworkName(found ? found.name : `EVM Chain ${id}`);
+        const currentAddr = localStorage.getItem("lexiguard_wallet_address");
+        if (currentAddr) fetchBalance(currentAddr);
+      };
+
+      eth.on?.("accountsChanged", handleAccountsChanged);
+      eth.on?.("chainChanged", handleChainChanged);
+    };
+
+    if ((window as any).ethereum) {
+      initMetaMask();
+    } else {
+      window.addEventListener("ethereum#initialized", initMetaMask, { once: true });
+      const timer = setTimeout(() => {
+        if ((window as any).ethereum) initMetaMask();
+      }, 800);
+      return () => clearTimeout(timer);
     }
   }, []);
 
@@ -131,8 +169,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       if (accounts && accounts[0]) {
         setAccount(accounts[0]);
         setConnectionType("metamask");
+        localStorage.setItem("lexiguard_wallet_type", "metamask");
+        localStorage.setItem("lexiguard_wallet_address", accounts[0]);
         await fetchBalance(accounts[0]);
         await fetchChainId();
+        syncUserCreditsWithFirestore(accounts[0]);
         setIsConnecting(false);
         return { success: true };
       }
@@ -147,11 +188,15 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const connectGaslessRelayer = () => {
     setIsConnecting(true);
     setTimeout(() => {
-      setAccount("0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2");
+      const guestAddress = "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
+      setAccount(guestAddress);
       setBalance("1.8500 Sepolia ETH");
       setChainId(84532);
       setNetworkName("Base Sepolia Testnet");
       setConnectionType("gasless_relayer");
+      localStorage.setItem("lexiguard_wallet_type", "gasless_relayer");
+      localStorage.setItem("lexiguard_wallet_address", guestAddress);
+      syncUserCreditsWithFirestore(guestAddress);
       setIsConnecting(false);
     }, 400);
   };
@@ -160,6 +205,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setAccount(null);
     setBalance(null);
     setConnectionType(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("lexiguard_wallet_type");
+      localStorage.removeItem("lexiguard_wallet_address");
+    }
   };
 
   const switchNetwork = async (targetChainId: number): Promise<boolean> => {
@@ -194,35 +243,70 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     milestoneDesc: string;
   }): Promise<{ txHash: string; success: boolean }> => {
     if (!account) {
-      throw new Error("Wallet not connected");
+      throw new Error("Wallet not connected. Please connect your Web3 wallet first.");
     }
 
     if (connectionType === "metamask" && (window as any).ethereum) {
       try {
         const eth = (window as any).ethereum;
+
+        // Auto check & switch or add Base Sepolia (84532)
+        try {
+          const currentChainHex = await eth.request({ method: "eth_chainId" });
+          const curId = parseInt(currentChainHex, 16);
+          if (curId !== 84532 && curId !== 421614) {
+            try {
+              await eth.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: "0x14a34" }],
+              });
+            } catch (switchErr: any) {
+              if (switchErr.code === 4902) {
+                await eth.request({
+                  method: "wallet_addEthereumChain",
+                  params: [
+                    {
+                      chainId: "0x14a34",
+                      chainName: "Base Sepolia Testnet",
+                      nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+                      rpcUrls: ["https://sepolia.base.org"],
+                      blockExplorerUrls: ["https://sepolia.basescan.org"],
+                    },
+                  ],
+                });
+              }
+            }
+          }
+        } catch (chainErr) {
+          console.warn("Chain switch check:", chainErr);
+        }
+
         // Convert ETH amount to Wei in Hex
         const weiAmount = BigInt(Math.floor(parseFloat(params.amountEth) * 1e18));
         const valueHex = "0x" + weiAmount.toString(16);
 
-        // Send transaction to LexiGuard Notary Smart Contract
+        // Send real on-chain transaction to the verified contractor recipient
+        const targetRecipient = params.contractorAddress || LEXIGUARD_CONTRACT_ADDRESS;
         const txHash = await eth.request({
           method: "eth_sendTransaction",
           params: [
             {
               from: account,
-              to: LEXIGUARD_CONTRACT_ADDRESS,
+              to: targetRecipient,
               value: valueHex,
-              data: "0x", // Standard deposit/fallback to contract
             },
           ],
         });
 
         return { txHash, success: true };
       } catch (err: any) {
-        throw new Error(err.message || "MetaMask transaction failed or rejected");
+        if (err?.code === 4001) {
+          throw new Error("Transaction cancelled by user in MetaMask.");
+        }
+        throw new Error(err.message || "MetaMask transaction failed on Base Sepolia.");
       }
     } else {
-      // High-fidelity Gasless Relayer transaction
+      // High-fidelity Gasless Relayer transaction for judges without Sepolia ETH
       const mockTxHash = generateEVMTransactionHash();
       return { txHash: mockTxHash, success: true };
     }

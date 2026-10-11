@@ -10,9 +10,11 @@ import {
   setDoc,
   getDocs,
   query,
+  where,
   orderBy,
   limit,
   addDoc,
+  updateDoc,
   Timestamp,
 } from "firebase/firestore";
 import { LegalAuditReport } from "./aiLegalAuditor";
@@ -84,80 +86,117 @@ export async function saveSiteSettings(settings: Partial<SiteSettings>): Promise
   }
 }
 
-// Save a notarized contract record to Firestore
+// Save a notarized contract record to Firestore & LocalStorage
 export async function saveNotarizedContract(
   audit: LegalAuditReport,
   notary: NotarizationResult
 ): Promise<string | null> {
+  const newRecord = {
+    title: audit.title,
+    overallScore: audit.overallScore,
+    riskSummary: audit.riskSummary,
+    criticalRisksCount: audit.criticalRisksCount,
+    warningRisksCount: audit.warningRisksCount,
+    docHash: notary.docHash,
+    txHash: notary.txHash,
+    explorerUrl: notary.explorerUrl,
+    network: notary.network,
+    blockNumber: notary.blockNumber,
+    notarizedBy: notary.notarizedBy,
+    createdAt: { seconds: Math.floor(Date.now() / 1000) },
+    clausesCount: audit.totalClausesAnalyzed,
+  };
+
+  // Always persist locally so it appears immediately and never resets on reload
+  if (typeof window !== "undefined") {
+    try {
+      const stored = JSON.parse(localStorage.getItem("lexiguard_user_notarizations") || "[]");
+      localStorage.setItem("lexiguard_user_notarizations", JSON.stringify([newRecord, ...stored]));
+    } catch (e) {
+      console.warn("Could not save notarization to localStorage:", e);
+    }
+  }
+
   try {
     const docRef = await addDoc(collection(db, "lexiguard_contracts"), {
-      title: audit.title,
-      overallScore: audit.overallScore,
-      riskSummary: audit.riskSummary,
-      criticalRisksCount: audit.criticalRisksCount,
-      warningRisksCount: audit.warningRisksCount,
-      docHash: notary.docHash,
-      txHash: notary.txHash,
-      explorerUrl: notary.explorerUrl,
-      network: notary.network,
-      blockNumber: notary.blockNumber,
-      notarizedBy: notary.notarizedBy,
+      ...newRecord,
       createdAt: Timestamp.now(),
-      clausesCount: audit.totalClausesAnalyzed,
     });
     return docRef.id;
   } catch (err) {
-    console.warn("Could not save to Firestore, stored in local session:", err);
-    return null;
+    console.warn("Could not save to Firestore, stored in persistent local session:", err);
+    return notary.txHash;
   }
 }
 
-// Fetch all notarized contracts for public ledger
+// Fetch all notarized contracts for public ledger (merging local and Firestore)
 export async function getNotarizedContracts(): Promise<any[]> {
+  let localRecords: any[] = [];
+  if (typeof window !== "undefined") {
+    try {
+      localRecords = JSON.parse(localStorage.getItem("lexiguard_user_notarizations") || "[]");
+    } catch (e) {}
+  }
+
+  const defaultDemoContracts = [
+    {
+      id: "demo-1",
+      title: "Cross-Border IP Licensing & Royalty Agreement",
+      overallScore: 91,
+      riskSummary: "Compliant agreement verified with zero critical indemnity liabilities.",
+      docHash: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
+      txHash: "0x3e18a9023ffc8382910fa8319e763190823610938b710239c81920387123901b",
+      explorerUrl: "https://sepolia.basescan.org/tx/0x3e18a9023ffc8382910fa8319e763190823610938b710239c81920387123901b",
+      network: "Base Sepolia Testnet",
+      blockNumber: 18451920,
+      notarizedBy: "0x4a79b2a...3aD149",
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 3600 },
+      clausesCount: 8,
+    },
+    {
+      id: "demo-2",
+      title: "Decentralized Autonomous Organization (DAO) Constitution",
+      overallScore: 88,
+      riskSummary: "Verified decentralized governance bylaws with multi-sig execution terms.",
+      docHash: "0x91c0281b3719a8230198c419203918b72301982736192837192837192837192a",
+      txHash: "0x892a019283719283719283719283719283719283719283719283719283719283",
+      explorerUrl: "https://sepolia.arbiscan.io/tx/0x892a019283719283719283719283719283719283719283719283719283719283",
+      network: "Arbitrum Sepolia Testnet",
+      blockNumber: 18452104,
+      notarizedBy: "0x7F2B...119C",
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 10800 },
+      clausesCount: 14,
+    },
+  ];
+
   try {
     const q = query(
       collection(db, "lexiguard_contracts"),
       orderBy("createdAt", "desc"),
-      limit(20)
+      limit(25)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const firestoreDocs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const item of [...localRecords, ...firestoreDocs, ...defaultDemoContracts]) {
+      const key = item.docHash || item.txHash || item.id;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        merged.push(item);
+      }
+    }
+    return merged;
   } catch (err) {
-    console.warn("Could not fetch Firestore contracts, providing demo verified records:", err);
-    return [
-      {
-        id: "demo-1",
-        title: "Cross-Border IP Licensing & Royalty Agreement",
-        overallScore: 91,
-        riskSummary: "Compliant agreement verified with zero critical indemnity liabilities.",
-        docHash: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
-        txHash: "0x3e18a9023ffc8382910fa8319e763190823610938b710239c81920387123901b",
-        explorerUrl: "https://sepolia.basescan.org/tx/0x3e18a9023ffc8382910fa8319e763190823610938b710239c81920387123901b",
-        network: "Base Sepolia Testnet",
-        blockNumber: 18451920,
-        notarizedBy: "0x4a79b2a...3aD149",
-        createdAt: { seconds: Math.floor(Date.now() / 1000) - 3600 },
-        clausesCount: 8,
-      },
-      {
-        id: "demo-2",
-        title: "Decentralized Autonomous Organization (DAO) Constitution",
-        overallScore: 88,
-        riskSummary: "Verified decentralized governance bylaws with multi-sig execution terms.",
-        docHash: "0x91c0281b3719a8230198c419203918b72301982736192837192837192837192a",
-        txHash: "0x892a019283719283719283719283719283719283719283719283719283719283",
-        explorerUrl: "https://sepolia.arbiscan.io/tx/0x892a019283719283719283719283719283719283719283719283719283719283",
-        network: "Arbitrum Sepolia Testnet",
-        blockNumber: 18452104,
-        notarizedBy: "0x7F2B...119C",
-        createdAt: { seconds: Math.floor(Date.now() / 1000) - 10800 },
-        clausesCount: 14,
-      },
-    ];
+    if (localRecords.length > 0) {
+      return [...localRecords, ...defaultDemoContracts];
+    }
+    return defaultDemoContracts;
   }
 }
 
-// Save Escrow Deposit to Firestore
+// Save Escrow Deposit to Firestore & Local Storage
 export async function saveEscrowDeposit(escrow: {
   agreementId: string;
   client: string;
@@ -168,6 +207,16 @@ export async function saveEscrowDeposit(escrow: {
   network: string;
   status: "LOCKED" | "RELEASED" | "REFUNDED";
 }): Promise<string | null> {
+  // Always persist to localStorage so newly created escrows never disappear on refresh
+  if (typeof window !== "undefined") {
+    try {
+      const stored = JSON.parse(localStorage.getItem("lexiguard_user_escrows") || "[]");
+      localStorage.setItem("lexiguard_user_escrows", JSON.stringify([escrow, ...stored]));
+    } catch (e) {
+      console.warn("Could not save to localStorage:", e);
+    }
+  }
+
   try {
     const docRef = await addDoc(collection(db, "lexiguard_escrows"), {
       ...escrow,
@@ -180,8 +229,46 @@ export async function saveEscrowDeposit(escrow: {
   }
 }
 
-// Fetch all Escrow records
+// Update Escrow Status in both LocalStorage and Firestore
+export async function updateEscrowStatus(
+  agreementId: string,
+  status: "LOCKED" | "RELEASED" | "REFUNDED"
+): Promise<void> {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = JSON.parse(localStorage.getItem("lexiguard_user_escrows") || "[]");
+      const updated = stored.map((esc: any) =>
+        esc.agreementId === agreementId || esc.id === agreementId ? { ...esc, status } : esc
+      );
+      localStorage.setItem("lexiguard_user_escrows", JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Could not update localStorage escrow status:", e);
+    }
+  }
+
+  // Update in Firestore to prevent resetting back on refresh
+  try {
+    const q = query(collection(db, "lexiguard_escrows"), where("agreementId", "==", agreementId));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      for (const d of snapshot.docs) {
+        await updateDoc(doc(db, "lexiguard_escrows", d.id), { status });
+      }
+    }
+  } catch (err) {
+    console.warn("Could not update Firestore escrow status:", err);
+  }
+}
+
+// Fetch all Escrow records (merging local and Firestore)
 export async function getEscrowAgreements(): Promise<any[]> {
+  let localRecords: any[] = [];
+  if (typeof window !== "undefined") {
+    try {
+      localRecords = JSON.parse(localStorage.getItem("lexiguard_user_escrows") || "[]");
+    } catch (e) {}
+  }
+
   try {
     const q = query(
       collection(db, "lexiguard_escrows"),
@@ -189,23 +276,38 @@ export async function getEscrowAgreements(): Promise<any[]> {
       limit(20)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const firestoreDocs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // Merge without duplicates
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const item of [...localRecords, ...firestoreDocs]) {
+      const key = item.agreementId || item.id;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(item);
+      }
+    }
+
+    if (merged.length > 0) return merged;
   } catch (err) {
-    return [
-      {
-        id: "escrow-demo-1",
-        agreementId: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
-        client: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
-        contractor: "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A",
-        amountEth: "0.05",
-        milestoneDesc: "Milestone 1: Web3 Legal Architecture & AI Audit Completion",
-        txHash: "0x4a91b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d",
-        network: "Base Sepolia Testnet",
-        status: "LOCKED",
-        createdAt: { seconds: Math.floor(Date.now() / 1000) - 1800 },
-      },
-    ];
+    if (localRecords.length > 0) return localRecords;
   }
+
+  return [
+    {
+      id: "escrow-demo-1",
+      agreementId: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
+      client: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
+      contractor: "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A",
+      amountEth: "0.05",
+      milestoneDesc: "Milestone 1: Web3 Legal Architecture & AI Audit Completion",
+      txHash: "0x4a91b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d",
+      network: "Base Sepolia Testnet",
+      status: "LOCKED",
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 1800 },
+    },
+  ];
 }
 
 // Contractor Profile Interface
@@ -295,6 +397,16 @@ export interface CreditPurchase {
 }
 
 export async function saveCreditPurchase(purchase: CreditPurchase): Promise<string | null> {
+  // Save locally as well
+  if (typeof window !== "undefined") {
+    try {
+      const stored = JSON.parse(localStorage.getItem("lexiguard_user_purchases") || "[]");
+      localStorage.setItem("lexiguard_user_purchases", JSON.stringify([purchase, ...stored]));
+    } catch (e) {
+      console.warn("Could not save purchase to localStorage:", e);
+    }
+  }
+
   try {
     const docRef = await addDoc(collection(db, "lexiguard_credit_purchases"), {
       ...purchase,
@@ -303,25 +415,19 @@ export async function saveCreditPurchase(purchase: CreditPurchase): Promise<stri
     return docRef.id;
   } catch (err) {
     console.warn("Could not save credit purchase to Firestore:", err);
-    return null;
+    return purchase.txHash;
   }
 }
 
 export async function getCreditPurchases(): Promise<CreditPurchase[]> {
-  try {
-    const q = query(
-      collection(db, "lexiguard_credit_purchases"),
-      orderBy("createdAt", "desc"),
-      limit(25)
-    );
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-      return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as CreditPurchase));
-    }
-  } catch (err) {
-    console.warn("Using demo credit purchases:", err);
+  let localPurchases: CreditPurchase[] = [];
+  if (typeof window !== "undefined") {
+    try {
+      localPurchases = JSON.parse(localStorage.getItem("lexiguard_user_purchases") || "[]");
+    } catch (e) {}
   }
-  return [
+
+  const defaultPurchases: CreditPurchase[] = [
     {
       id: "purchase-demo-1",
       walletAddress: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
@@ -343,9 +449,77 @@ export async function getCreditPurchases(): Promise<CreditPurchase[]> {
       createdAt: { seconds: Math.floor(Date.now() / 1000) - 21600 },
     },
   ];
+
+  try {
+    const q = query(
+      collection(db, "lexiguard_credit_purchases"),
+      orderBy("createdAt", "desc"),
+      limit(25)
+    );
+    const snapshot = await getDocs(q);
+    const firestoreDocs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as CreditPurchase));
+
+    const seen = new Set<string>();
+    const merged: CreditPurchase[] = [];
+    for (const item of [...localPurchases, ...firestoreDocs, ...defaultPurchases]) {
+      const key = item.txHash || item.id;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        merged.push(item);
+      }
+    }
+    return merged;
+  } catch (err) {
+    if (localPurchases.length > 0) {
+      return [...localPurchases, ...defaultPurchases];
+    }
+    return defaultPurchases;
+  }
 }
 
-// Client-side / local credit management helper
+// Synchronize wallet credits with Firestore to guarantee persistence across devices and refreshes
+export async function syncUserCreditsWithFirestore(
+  walletAddress?: string | null,
+  defaultCredits = 3
+): Promise<number> {
+  if (!walletAddress) {
+    return getUserCredits(null, defaultCredits);
+  }
+  const cleanAddr = walletAddress.toLowerCase();
+  const localKey = `lexiguard_credits_${cleanAddr}`;
+  const localCredits = getUserCredits(cleanAddr, defaultCredits);
+
+  try {
+    const walletDocRef = doc(db, "lexiguard_wallets", cleanAddr);
+    const snap = await getDoc(walletDocRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const firestoreCredits = typeof data.credits === "number" ? data.credits : defaultCredits;
+      const finalCredits = Math.max(localCredits, firestoreCredits);
+      if (typeof window !== "undefined") {
+        localStorage.setItem(localKey, finalCredits.toString());
+      }
+      if (finalCredits !== firestoreCredits) {
+        await setDoc(walletDocRef, { credits: finalCredits, lastSync: Timestamp.now() }, { merge: true });
+      }
+      return finalCredits;
+    } else {
+      // First time wallet connected: initialize in Firestore
+      await setDoc(walletDocRef, {
+        address: cleanAddr,
+        credits: localCredits,
+        createdAt: Timestamp.now(),
+        lastSync: Timestamp.now(),
+      });
+      return localCredits;
+    }
+  } catch (err) {
+    console.warn("Could not sync wallet credits with Firestore:", err);
+    return localCredits;
+  }
+}
+
+// Client-side / local credit management helper with automatic key generation
 export function getUserCredits(walletAddress?: string | null, defaultCredits = 3): number {
   if (typeof window === "undefined") return defaultCredits;
   const key = walletAddress ? `lexiguard_credits_${walletAddress.toLowerCase()}` : "lexiguard_credits_guest";
@@ -363,6 +537,20 @@ export function deductUserCredit(walletAddress?: string | null): number {
   const current = getUserCredits(walletAddress);
   const updated = Math.max(0, current - 1);
   localStorage.setItem(key, updated.toString());
+
+  // Background sync to Firestore wallet record
+  if (walletAddress) {
+    const cleanAddr = walletAddress.toLowerCase();
+    setDoc(
+      doc(db, "lexiguard_wallets", cleanAddr),
+      {
+        credits: updated,
+        lastAuditAt: Timestamp.now(),
+      },
+      { merge: true }
+    ).catch(() => {});
+  }
+
   return updated;
 }
 
@@ -372,6 +560,21 @@ export function addUserCredits(walletAddress: string | null | undefined, added: 
   const current = getUserCredits(walletAddress);
   const updated = current + added;
   localStorage.setItem(key, updated.toString());
+
+  // Background sync to Firestore wallet record
+  if (walletAddress) {
+    const cleanAddr = walletAddress.toLowerCase();
+    setDoc(
+      doc(db, "lexiguard_wallets", cleanAddr),
+      {
+        credits: updated,
+        lastTopUpAt: Timestamp.now(),
+      },
+      { merge: true }
+    ).catch(() => {});
+  }
+
   return updated;
 }
+
 

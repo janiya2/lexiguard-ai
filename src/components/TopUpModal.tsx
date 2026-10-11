@@ -36,7 +36,7 @@ export default function TopUpModal({
   onClose,
   onCreditsPurchased,
 }: TopUpModalProps) {
-  const { account, chainId } = useWeb3();
+  const { account, chainId, connectionType, connectMetaMask } = useWeb3();
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [selectedPackIndex, setSelectedPackIndex] = useState(1); // Default to Pro Pack
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -93,23 +93,33 @@ export default function TopUpModal({
   const selectedPack = packs[selectedPackIndex];
 
   const handleBuy = async () => {
+    if (!account) {
+      const res = await connectMetaMask();
+      if (!res.success) {
+        setErrorMessage(res.error || "Please connect a Web3 wallet first to complete purchase.");
+        return;
+      }
+    }
+
     setIsPurchasing(true);
     setErrorMessage(null);
 
     try {
       const treasury = settings.ownerTreasuryAddress || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
       const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
+      const isMetaMask = connectionType === "metamask";
 
       const res = await purchaseAuditCreditsOnChain(
         selectedPack.priceEth,
         treasury,
         account || undefined,
-        networkKey
+        networkKey,
+        isMetaMask
       );
 
-      // Record in Firestore
+      // Record in Firestore & LocalStorage
       await saveCreditPurchase({
-        walletAddress: account || "0x9E2F...GUEST",
+        walletAddress: account || "0x7F2B...DEMO",
         packName: selectedPack.name,
         creditsAdded: selectedPack.credits,
         amountEth: selectedPack.priceEth,
@@ -117,7 +127,7 @@ export default function TopUpModal({
         network: "Base Sepolia Testnet",
       });
 
-      // Update local credits
+      // Update user credits
       const updatedTotal = addUserCredits(account, selectedPack.credits);
       setCurrentCredits(updatedTotal);
 
@@ -283,13 +293,31 @@ export default function TopUpModal({
               {isPurchasing ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Confirming On-Chain Transfer...</span>
+                  <span>
+                    {connectionType === "metamask"
+                      ? "Waiting for MetaMask Confirmation..."
+                      : "Confirming On-Chain Transfer..."}
+                  </span>
+                </>
+              ) : connectionType === "metamask" ? (
+                <>
+                  <span className="text-sm">🦊</span>
+                  <span>
+                    Pay with MetaMask ({selectedPack.priceEth} ETH — +{selectedPack.credits} Audits)
+                  </span>
+                </>
+              ) : connectionType === "gasless_relayer" ? (
+                <>
+                  <Zap className="w-4 h-4 text-purple-300" />
+                  <span>
+                    Top Up via Gasless Relayer ({selectedPack.priceEth} ETH — +{selectedPack.credits} Audits)
+                  </span>
                 </>
               ) : (
                 <>
-                  <Coins className="w-4 h-4" />
+                  <Wallet className="w-4 h-4" />
                   <span>
-                    Top Up {selectedPack.credits} Audits ({selectedPack.priceEth} ETH)
+                    Connect Wallet & Top Up ({selectedPack.priceEth} ETH)
                   </span>
                 </>
               )}

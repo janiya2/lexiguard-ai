@@ -17,7 +17,7 @@ import { SUPPORTED_NETWORKS } from "@/lib/web3Service";
 import { useWeb3 } from "@/context/Web3Context";
 import WalletConnectModal from "@/components/WalletConnectModal";
 import TopUpModal from "@/components/TopUpModal";
-import { getUserCredits } from "@/lib/firestoreService";
+import { getUserCredits, syncUserCreditsWithFirestore } from "@/lib/firestoreService";
 
 export default function Navbar() {
   const {
@@ -35,9 +35,13 @@ export default function Navbar() {
   const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
   const [credits, setCredits] = useState(3);
 
-  // Load user credits on mount and whenever account changes
+  // Load user credits on mount and whenever account changes with Firestore sync
   React.useEffect(() => {
-    setCredits(getUserCredits(account));
+    if (account) {
+      syncUserCreditsWithFirestore(account).then(setCredits);
+    } else {
+      setCredits(getUserCredits(null));
+    }
   }, [account]);
 
   const currentNetwork =

@@ -18,11 +18,13 @@ import confetti from "canvas-confetti";
 import { useWeb3, LEXIGUARD_CONTRACT_ADDRESS } from "@/context/Web3Context";
 import {
   saveEscrowDeposit,
+  updateEscrowStatus,
   getEscrowAgreements,
   getContractorProfiles,
   DEFAULT_CONTRACTORS,
   ContractorProfile,
 } from "@/lib/firestoreService";
+import WalletConnectModal from "@/components/WalletConnectModal";
 
 export default function EscrowVaultSection() {
   const { account, balance, connectionType, depositToEscrow, networkName } = useWeb3();
@@ -41,6 +43,7 @@ export default function EscrowVaultSection() {
   const [txSuccess, setTxSuccess] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -59,7 +62,7 @@ export default function EscrowVaultSection() {
     setTxSuccess(null);
 
     if (!account) {
-      setErrorMessage("Please connect your Web3 wallet (MetaMask or Gasless Relayer) above first.");
+      setIsConnectModalOpen(true);
       return;
     }
 
@@ -114,7 +117,8 @@ export default function EscrowVaultSection() {
     }
   };
 
-  const handleRelease = (id: string) => {
+  const handleRelease = async (id: string) => {
+    await updateEscrowStatus(id, "RELEASED");
     setEscrows((prev) =>
       prev.map((esc) =>
         esc.agreementId === id || esc.id === id
@@ -339,12 +343,31 @@ export default function EscrowVaultSection() {
               disabled={isDepositing}
               className="w-full mt-2 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white shadow-[0_0_25px_-5px_rgba(168,85,247,0.4)] transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
             >
-              <Lock className="w-4 h-4" />
-              <span>
-                {isDepositing
-                  ? "Securing Funds On-Chain..."
-                  : `Lock ${depositAmount} ETH in Smart Escrow`}
-              </span>
+              {isDepositing ? (
+                <>
+                  <Lock className="w-4 h-4 animate-spin" />
+                  <span>
+                    {connectionType === "metamask"
+                      ? "Awaiting MetaMask Confirmation..."
+                      : "Securing Funds On-Chain..."}
+                  </span>
+                </>
+              ) : connectionType === "metamask" ? (
+                <>
+                  <span className="text-sm">🦊</span>
+                  <span>Lock {depositAmount} ETH in Escrow (MetaMask)</span>
+                </>
+              ) : connectionType === "gasless_relayer" ? (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>Lock {depositAmount} ETH in Smart Escrow</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4" />
+                  <span>Connect Wallet to Lock Escrow ({depositAmount} ETH)</span>
+                </>
+              )}
             </button>
           </form>
         </div>
@@ -436,6 +459,12 @@ export default function EscrowVaultSection() {
           </div>
         </div>
       </div>
+
+      {/* Wallet Connect Modal */}
+      <WalletConnectModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
+      />
     </section>
   );
 }

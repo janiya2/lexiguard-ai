@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import CertificateModal from "@/components/CertificateModal";
 import TopUpModal from "@/components/TopUpModal";
+import WalletConnectModal from "@/components/WalletConnectModal";
 import {
   FileText,
   Sparkles,
@@ -21,6 +22,7 @@ import {
   ChevronRight,
   Filter,
   Zap,
+  Wallet,
 } from "lucide-react";
 import {
   SAMPLE_CONTRACTS,
@@ -34,13 +36,14 @@ import {
   saveNotarizedContract,
   getUserCredits,
   deductUserCredit,
+  syncUserCreditsWithFirestore,
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/firestoreService";
 import { useWeb3 } from "@/context/Web3Context";
 
 export default function AuditorPage() {
-  const { account, chainId } = useWeb3();
+  const { account, chainId, connectionType, connectMetaMask } = useWeb3();
   const [contractTitle, setContractTitle] = useState("Custom Legal Contract");
   const [contractText, setContractText] = useState(SAMPLE_CONTRACTS[0].text);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -50,6 +53,8 @@ export default function AuditorPage() {
   const [notarizationResult, setNotarizationResult] = useState<NotarizationResult | null>(null);
   const [isCertOpen, setIsCertOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [notaryError, setNotaryError] = useState<string | null>(null);
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [credits, setCredits] = useState(3);
 
@@ -66,7 +71,12 @@ export default function AuditorPage() {
     async function init() {
       const s = await getSiteSettings();
       setSettings(s);
-      setCredits(getUserCredits(account));
+      if (account) {
+        const synced = await syncUserCreditsWithFirestore(account);
+        setCredits(synced);
+      } else {
+        setCredits(getUserCredits(null));
+      }
       // Run initial audit on load
       const report = await analyzeContract("Predatory Freelancer Agreement", contractText, s.geminiApiKey);
       setAuditReport(report);
@@ -138,24 +148,36 @@ export default function AuditorPage() {
 
   const handleNotarizeOnChain = async () => {
     if (!auditReport) return;
+    setNotaryError(null);
+
+    // Require wallet connection before notarizing contracts on-chain
+    if (!account) {
+      setIsConnectModalOpen(true);
+      return;
+    }
+
     setIsNotarizing(true);
 
     try {
       const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
+      const isMetaMask = connectionType === "metamask";
+
       const res = await notarizeDocumentOnChain(
         contractTitle,
         contractText,
         auditReport.overallScore,
-        account || undefined,
-        networkKey
+        account,
+        networkKey,
+        isMetaMask
       );
       setNotarizationResult(res);
       setIsCertOpen(true);
 
-      // Save record in Firestore
+      // Save record in Firestore & LocalStorage
       await saveNotarizedContract(auditReport, res);
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("Notarization failed:", e);
+      setNotaryError(e.message || "Failed to notarize on-chain.");
     } finally {
       setIsNotarizing(false);
     }
@@ -210,11 +232,40 @@ export default function AuditorPage() {
               disabled={isNotarizing || !auditReport}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Notarize On-Chain</span>
+              {isNotarizing ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>
+                    {connectionType === "metamask"
+                      ? "Awaiting MetaMask..."
+                      : "Notarizing On-Chain..."}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Notarize On-Chain</span>
+                </>
+              )}
             </button>
           </div>
         </div>
+
+        {/* Notary Alert Banner */}
+        {notaryError && (
+          <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{notaryError}</span>
+            </div>
+            <button
+              onClick={() => setNotaryError(null)}
+              className="text-xs underline text-rose-400 hover:text-rose-300"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* 2-Column Split: Document Editor & Audit Results */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -455,11 +506,17 @@ export default function AuditorPage() {
         notary={notarizationResult}
       />
 
-      {/* Audit Credits Top-Up Modal */}
+      {/* Audit Credits TopUp Modal */}
       <TopUpModal
         isOpen={isTopUpOpen}
         onClose={() => setIsTopUpOpen(false)}
         onCreditsPurchased={(newTotal) => setCredits(newTotal)}
+      />
+
+      {/* Wallet Connect Modal */}
+      <WalletConnectModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
       />
     </div>
   );
