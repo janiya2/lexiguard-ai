@@ -45,6 +45,7 @@ import {
   LegalAuditReport,
   ClauseAnalysis,
 } from "@/lib/aiLegalAuditor";
+import { downloadAmendedContractDoc } from "@/lib/documentExporter";
 import { notarizeDocumentOnChain, NotarizationResult } from "@/lib/web3Service";
 import {
   getSiteSettings,
@@ -745,24 +746,42 @@ export default function AuditorPage() {
                     </div>
                   </div>
 
-                  {/* NOTARIZE ON-CHAIN ACTION BUTTON */}
-                  <button
-                    onClick={handleNotarizeOnChain}
-                    disabled={isNotarizing || !auditReport}
-                    className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 shrink-0"
-                  >
-                    {isNotarizing ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Notarizing to Base Sepolia...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>🛡️ Notarize On-Chain (-1 Credit)</span>
-                      </>
-                    )}
-                  </button>
+                  {/* ACTIONS: EXPORT DOC & NOTARIZE ON-CHAIN */}
+                  <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
+                    <button
+                      onClick={() => {
+                        downloadAmendedContractDoc({
+                          title: contractTitle,
+                          originalText: contractText,
+                          clauses: auditReport.clauses,
+                          auditReport: auditReport,
+                        });
+                      }}
+                      className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all hover:scale-105 active:scale-95 shadow-md"
+                      title="Download clean amended contract with AI redlines as Microsoft Word Document (.DOC)"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>📄 Export Redlined (.DOC)</span>
+                    </button>
+
+                    <button
+                      onClick={handleNotarizeOnChain}
+                      disabled={isNotarizing || !auditReport}
+                      className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                    >
+                      {isNotarizing ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Notarizing to Base Sepolia...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>🛡️ Notarize On-Chain (-1 Credit)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Risk Counters Breakdown */}

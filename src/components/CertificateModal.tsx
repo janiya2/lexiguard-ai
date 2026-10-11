@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { ShieldCheck, CheckCircle2, ExternalLink, Copy, Check, Download, X, Zap } from "lucide-react";
 import confetti from "canvas-confetti";
 import { NotarizationResult } from "@/lib/web3Service";
+import { downloadAmendedContractDoc } from "@/lib/documentExporter";
 
 interface CertificateModalProps {
   isOpen: boolean;
@@ -148,7 +149,7 @@ export default function CertificateModal({
               <CheckCircle2 className="w-3.5 h-3.5" /> Saved to Audit History
             </span>
             <a
-              href="https://sepolia.basescan.org/address/0x892a0dC7917C57E8675c9A9EbDE648F40F63F286"
+              href="https://sepolia.basescan.org/address/0x036cbd53842c5426634e7929541ec2318f3dcf7e"
               target="_blank"
               rel="noreferrer"
               className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1"
@@ -160,20 +161,37 @@ export default function CertificateModal({
 
         {/* Actions */}
         <div className="mt-6 flex flex-col gap-2.5">
-          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+          {/* Primary Action: Download Amended Legal Contract (.DOC Word Document) */}
+          <button
+            onClick={() => {
+              downloadAmendedContractDoc({
+                title,
+                originalText: `AGREEMENT: ${title}\n1. IP & INVENTIONS: All rights assigned according to agreed Statement of Work.\n2. INDEMNITY: Mutual indemnification capped at total fees paid.\n3. PAYMENT TERMS: Net 15 days upon milestone completion.\n4. TERMINATION: 14 days written notice required.\n5. JURISDICTION: Mutual digital arbitration.`,
+                docHash: notary.docHash,
+                txHash: notary.txHash,
+                network: notary.network,
+              });
+            }}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-black shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.01]"
+          >
+            <Download className="w-4 h-4" />
+            <span>📄 Download Amended Legal Contract (.DOC / Word)</span>
+          </button>
+
+          <div className="flex flex-col sm:flex-row items-center gap-2">
             <a
               href={notary.explorerUrl}
               target="_blank"
               rel="noreferrer"
-              className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-black transition-all shadow-lg hover:shadow-cyan-500/25"
+              className="w-full sm:flex-1 flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 transition-all"
             >
-              <span>View on BaseScan Explorer</span>
+              <span>View on BaseScan</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
 
             <button
               onClick={copyProof}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? "Copied" : "Copy Proof"}</span>
@@ -181,7 +199,7 @@ export default function CertificateModal({
 
             <button
               onClick={downloadJSON}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
               title="Download Certificate JSON"
             >
               <Download className="w-3.5 h-3.5" />

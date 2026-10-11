@@ -27,7 +27,7 @@ export interface Web3ContextType {
 const Web3Context = createContext<Web3ContextType | undefined>(undefined);
 
 // Deployed LexiGuard Notary Smart Contract on Base Sepolia
-export const LEXIGUARD_CONTRACT_ADDRESS = "0x892a0dC7917C57E8675c9A9EbDE648F40F63F286";
+export const LEXIGUARD_CONTRACT_ADDRESS = "0x036cbd53842c5426634e7929541ec2318f3dcf7e";
 
 export function Web3Provider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<string | null>(null);
