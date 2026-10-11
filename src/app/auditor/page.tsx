@@ -37,7 +37,8 @@ import {
   Settings as SettingsIcon,
   HelpCircle,
   FileCode,
-  Scale
+  Scale,
+  Compass
 } from "lucide-react";
 import {
   SAMPLE_CONTRACTS,
@@ -83,6 +84,10 @@ export default function AuditorPage() {
   const [aiEngineType, setAiEngineType] = useState<"gemini" | "openai">("gemini");
   const [customKeyInput, setCustomKeyInput] = useState("");
   const [copiedClauseId, setCopiedClauseId] = useState<string | null>(null);
+
+  // Left Panel Workspace Tab & Clause Highlight
+  const [leftPanelTab, setLeftPanelTab] = useState<"editor" | "copilot" | "navigator">("editor");
+  const [activeClauseHighlight, setActiveClauseHighlight] = useState<string | null>(null);
 
   // Uploaded document metadata & preview
   const [uploadedFileMeta, setUploadedFileMeta] = useState<{
@@ -289,6 +294,15 @@ export default function AuditorPage() {
     setTimeout(() => setCopiedClauseId(null), 2000);
   };
 
+  const scrollToClause = (clauseId: string) => {
+    setActiveClauseHighlight(clauseId);
+    const el = document.getElementById(`clause-${clauseId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setTimeout(() => setActiveClauseHighlight(null), 3000);
+  };
+
   const handleNotarizeOnChain = async () => {
     if (!account) {
       setIsConnectModalOpen(true);
@@ -356,7 +370,7 @@ export default function AuditorPage() {
     }) || [];
 
   return (
-    <div className="flex flex-col min-h-screen relative text-slate-100 bg-[#040711] overflow-x-hidden">
+    <div className="flex flex-col min-h-screen relative text-slate-100 bg-[#040711] overflow-x-clip">
       {/* Background Graphic with gradient scrim */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div
@@ -475,235 +489,420 @@ export default function AuditorPage() {
 
         {/* 2-Column Split: Document Studio & Audit Results */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Column: Document Studio & Chat Co-Pilot */}
-          <div className="lg:col-span-5 space-y-6">
-            {/* Document Input & Upload Card */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 p-5 sm:p-6 space-y-5 shadow-2xl backdrop-blur-xl">
-              {/* Document Header & Title Input */}
-              <div className="space-y-1.5 border-b border-white/10 pb-4">
-                <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5 text-cyan-400">
-                    <FileText className="w-3.5 h-3.5" /> Contract Title
-                  </span>
-                  <button
-                    onClick={() => {
-                      setContractText("");
-                      setUploadedFileMeta(null);
-                      setInvalidDocError(null);
-                    }}
-                    className="text-slate-500 hover:text-rose-400 text-[10px] lowercase transition-colors"
-                  >
-                    clear text
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={contractTitle}
-                  onChange={(e) => setContractTitle(e.target.value)}
-                  className="w-full bg-slate-950/70 rounded-xl px-3.5 py-2 text-sm font-bold text-white border border-white/10 focus:outline-none focus:border-cyan-400 transition-colors"
-                  placeholder="Enter document title (e.g. Master Services Agreement)..."
-                />
-              </div>
+          {/* Left Column: Sticky Unified Document Studio, Co-Pilot & Clause Navigator */}
+          <div className="lg:col-span-5 lg:sticky lg:top-24 lg:self-start space-y-3.5 lg:max-h-[calc(100vh-7rem)] overflow-y-auto pr-1">
+            
+            {/* Studio Mode Switcher Tabs */}
+            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-950/80 border border-white/10 text-xs backdrop-blur-md shadow-lg">
+              <button
+                onClick={() => setLeftPanelTab("editor")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-bold transition-all ${
+                  leftPanelTab === "editor"
+                    ? "bg-cyan-500 text-black shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Document Studio</span>
+              </button>
 
-              {/* Upload & Preset Toolbar */}
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all shadow-sm">
-                    {isUploadingFile ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
-                    ) : (
-                      <Upload className="w-3.5 h-3.5 text-cyan-400" />
-                    )}
-                    <span>{isUploadingFile ? "Uploading File..." : "Upload Document / Scan"}</span>
-                    <input
-                      type="file"
-                      accept=".txt,.pdf,.docx,.doc,.png,.jpg,.jpeg,.md"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      disabled={isUploadingFile}
-                    />
-                  </label>
+              <button
+                onClick={() => setLeftPanelTab("copilot")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-bold transition-all ${
+                  leftPanelTab === "copilot"
+                    ? "bg-cyan-500 text-black shadow-md shadow-cyan-500/20"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>AI Co-Pilot</span>
+              </button>
 
-                  <select
-                    onChange={(e) => {
-                      const selected = SAMPLE_CONTRACTS.find((s) => s.id === e.target.value);
-                      if (selected) {
-                        setContractTitle(selected.title);
-                        setContractText(selected.text);
+              {auditReport?.clauses && auditReport.clauses.length > 0 && (
+                <button
+                  onClick={() => setLeftPanelTab("navigator")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-bold transition-all ${
+                    leftPanelTab === "navigator"
+                      ? "bg-cyan-500 text-black shadow-md shadow-cyan-500/20"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>Clause Map ({auditReport.clauses.length})</span>
+                </button>
+              )}
+            </div>
+
+            {/* TAB 1: DOCUMENT INPUT & UPLOAD STUDIO */}
+            {leftPanelTab === "editor" && (
+              <div className="rounded-3xl bg-slate-900/70 border border-white/10 p-5 sm:p-6 space-y-4 shadow-2xl backdrop-blur-xl animate-in fade-in">
+                {/* Document Header & Title Input */}
+                <div className="space-y-1.5 border-b border-white/10 pb-3.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5 text-cyan-400">
+                      <FileText className="w-3.5 h-3.5" /> Contract Title
+                    </span>
+                    <button
+                      onClick={() => {
+                        setContractText("");
                         setUploadedFileMeta(null);
                         setInvalidDocError(null);
-                      }
-                    }}
-                    className="bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-cyan-500/40"
-                    defaultValue="predatory-freelance"
-                  >
-                    <option value="predatory-freelance">Preset: Predatory Contract (High Risk)</option>
-                    <option value="web3-advisory-agreement">Preset: Balanced Token Advisor</option>
-                    <option value="saas-enterprise-sla">Preset: SaaS Enterprise SLA</option>
-                  </select>
-                </div>
-
-                {/* Formats Badge Bar */}
-                <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 flex-wrap gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-500 font-semibold">Accepted:</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">PDF</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">DOCX</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">PNG/JPG</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">TXT</span>
+                      }}
+                      className="text-slate-500 hover:text-rose-400 text-[10px] lowercase transition-colors"
+                    >
+                      clear text
+                    </button>
                   </div>
-                  <span className="text-emerald-400/90 font-medium">⚡ Firebase Storage Vault</span>
+                  <input
+                    type="text"
+                    value={contractTitle}
+                    onChange={(e) => setContractTitle(e.target.value)}
+                    className="w-full bg-slate-950/70 rounded-xl px-3.5 py-2 text-sm font-bold text-white border border-white/10 focus:outline-none focus:border-cyan-400 transition-colors"
+                    placeholder="Enter document title (e.g. Master Services Agreement)..."
+                  />
                 </div>
-              </div>
 
-              {/* LIVE DOCUMENT PREVIEW (Image / PDF / DOCX) */}
-              {uploadedFileMeta && (
-                <div className="rounded-2xl bg-slate-950/90 border border-cyan-500/30 p-3.5 space-y-3 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                        {uploadedFileMeta.isImage ? (
-                          <ImageIcon className="w-4 h-4" />
-                        ) : (
-                          <FileText className="w-4 h-4" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-white truncate max-w-[180px] sm:max-w-[240px]">
-                          {uploadedFileMeta.name}
-                        </p>
-                        <p className="text-[10px] text-slate-400">
-                          {(uploadedFileMeta.size / 1024).toFixed(1)} KB •{" "}
-                          <span className="text-emerald-400">Cloud Storage Stored</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      {uploadedFileMeta.isImage && (
-                        <button
-                          onClick={() => setShowFullImageModal(true)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                          title="Preview Image"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
+                {/* Upload & Preset Toolbar */}
+                <div className="space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="cursor-pointer flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all shadow-sm">
+                      {isUploadingFile ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5 text-cyan-400" />
                       )}
-                      <button
-                        onClick={handleRemoveFile}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
-                        title="Remove Document"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                      <span>{isUploadingFile ? "Uploading..." : "Upload Document"}</span>
+                      <input
+                        type="file"
+                        accept=".txt,.pdf,.docx,.doc,.png,.jpg,.jpeg,.md"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        disabled={isUploadingFile}
+                      />
+                    </label>
+
+                    <select
+                      onChange={(e) => {
+                        const selected = SAMPLE_CONTRACTS.find((s) => s.id === e.target.value);
+                        if (selected) {
+                          setContractTitle(selected.title);
+                          setContractText(selected.text);
+                          setUploadedFileMeta(null);
+                          setInvalidDocError(null);
+                        }
+                      }}
+                      className="bg-slate-950 border border-white/10 rounded-xl px-2.5 py-2 text-xs text-slate-300 focus:outline-none focus:border-cyan-400"
+                      defaultValue="predatory-freelance"
+                    >
+                      <option value="predatory-freelance">Preset: Predatory Contract (High Risk)</option>
+                      <option value="web3-advisory-agreement">Preset: Balanced Token Advisor</option>
+                      <option value="saas-enterprise-sla">Preset: SaaS Enterprise SLA</option>
+                    </select>
                   </div>
 
-                  {/* Thumbnail preview if Image */}
-                  {uploadedFileMeta.isImage && (
-                    <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-36 bg-slate-900 group">
-                      <img
-                        src={uploadedFileMeta.url}
-                        alt="Contract Scan Preview"
-                        className="w-full h-36 object-contain cursor-pointer group-hover:scale-105 transition-transform"
-                        onClick={() => setShowFullImageModal(true)}
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                        <span className="text-[11px] font-bold text-white bg-black/60 px-2 py-1 rounded-lg">
-                          Click to Expand
-                        </span>
+                  {/* Formats Badge Bar */}
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 flex-wrap gap-1.5">
+                    <div className="flex items-center gap-1">
+                      <span className="text-slate-500 font-semibold">Accepted:</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">PDF</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">DOCX</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">PNG/JPG</span>
+                      <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">TXT</span>
+                    </div>
+                    <span className="text-emerald-400/90 font-medium">⚡ Firebase Cloud Vault</span>
+                  </div>
+                </div>
+
+                {/* LIVE DOCUMENT PREVIEW (Image / PDF / DOCX) */}
+                {uploadedFileMeta && (
+                  <div className="rounded-2xl bg-slate-950/90 border border-cyan-500/30 p-3 space-y-2.5 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                          {uploadedFileMeta.isImage ? (
+                            <ImageIcon className="w-3.5 h-3.5" />
+                          ) : (
+                            <FileText className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-white truncate max-w-[170px] sm:max-w-[220px]">
+                            {uploadedFileMeta.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {(uploadedFileMeta.size / 1024).toFixed(1)} KB •{" "}
+                            <span className="text-emerald-400">Storage Stored</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {uploadedFileMeta.isImage && (
+                          <button
+                            onClick={() => setShowFullImageModal(true)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                            title="Preview Image"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={handleRemoveFile}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
+                          title="Remove Document"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
 
-              {/* Textarea Editor */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span>Contract Terms & Clauses:</span>
-                  <span className="font-mono">{contractText.length} characters</span>
+                    {/* Thumbnail preview if Image */}
+                    {uploadedFileMeta.isImage && (
+                      <div className="relative rounded-xl overflow-hidden border border-white/10 max-h-28 bg-slate-900 group">
+                        <img
+                          src={uploadedFileMeta.url}
+                          alt="Contract Scan Preview"
+                          className="w-full h-28 object-contain cursor-pointer group-hover:scale-105 transition-transform"
+                          onClick={() => setShowFullImageModal(true)}
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                          <span className="text-[10px] font-bold text-white bg-black/60 px-2 py-0.5 rounded-lg">
+                            Click to Expand
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Textarea Editor */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Contract Terms & Clauses:</span>
+                    <span className="font-mono text-cyan-400">{contractText.length} characters</span>
+                  </div>
+                  <textarea
+                    value={contractText}
+                    onChange={(e) => {
+                      setContractText(e.target.value);
+                      if (invalidDocError) setInvalidDocError(null);
+                    }}
+                    rows={7}
+                    className="w-full rounded-2xl bg-slate-950/80 border border-white/10 p-3.5 font-mono text-xs text-slate-300 focus:outline-none focus:border-cyan-400 resize-none leading-relaxed shadow-inner"
+                    placeholder="Paste contract text, NDA, SLA, or agreement clauses here..."
+                  />
                 </div>
-                <textarea
-                  value={contractText}
-                  onChange={(e) => {
-                    setContractText(e.target.value);
-                    if (invalidDocError) setInvalidDocError(null);
-                  }}
-                  rows={12}
-                  className="w-full rounded-2xl bg-slate-950/80 border border-white/10 p-4 font-mono text-xs text-slate-300 focus:outline-none focus:border-cyan-400 resize-none leading-relaxed shadow-inner"
-                  placeholder="Paste contract text, NDA, SLA, or agreement clauses here..."
-                />
+
+                {/* PRIMARY ACTION: RUN LEGAL AUDIT BUTTON */}
+                <div className="pt-2 border-t border-white/10 space-y-2">
+                  <button
+                    onClick={handleRunAudit}
+                    disabled={isAuditing}
+                    className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-2xl text-xs sm:text-sm font-black uppercase tracking-wider bg-gradient-to-r from-cyan-400 via-cyan-300 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-black shadow-xl shadow-cyan-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+                  >
+                    {isAuditing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Auditing Clauses with AI Engine...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>⚡ Run AI Legal Risk Audit (-1 Credit)</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                    <span className="flex items-center gap-1 text-slate-400">
+                      <Lock className="w-3 h-3 text-cyan-400" /> Client-Side Privacy Hashed
+                    </span>
+                    <span>Evaluates 6 Risk Categories</span>
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* PRIMARY ACTION: RUN LEGAL AUDIT BUTTON */}
-              <div className="pt-2 border-t border-white/10 space-y-2">
-                <button
-                  onClick={handleRunAudit}
-                  disabled={isAuditing}
-                  className="w-full flex items-center justify-center gap-2.5 py-4 px-6 rounded-2xl text-xs sm:text-sm font-black uppercase tracking-wider bg-gradient-to-r from-cyan-400 via-cyan-300 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-black shadow-xl shadow-cyan-500/25 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-                >
-                  {isAuditing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Auditing Clauses with AI Engine...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>⚡ Run AI Legal Risk Audit (-1 Credit)</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-                  <span className="flex items-center gap-1 text-slate-400">
-                    <Lock className="w-3 h-3 text-cyan-400" /> Client-Side Privacy Hashed
+            {/* TAB 2: INTERACTIVE CHAT CO-PILOT */}
+            {leftPanelTab === "copilot" && (
+              <div className="rounded-3xl bg-slate-900/70 border border-white/10 p-5 space-y-4 flex flex-col h-[560px] shadow-2xl backdrop-blur-xl animate-in fade-in">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-cyan-400" />
+                    <span className="font-bold text-xs text-white">Ask Legal AI Co-Pilot</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Legal Model
                   </span>
-                  <span>Evaluates 6 Risk Categories</span>
+                </div>
+
+                {/* Quick Prompt Starters */}
+                <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                  <button
+                    onClick={() => setUserInput("Can the client terminate without paying for work done?")}
+                    className="px-2 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors"
+                  >
+                    Terminate without pay?
+                  </button>
+                  <button
+                    onClick={() => setUserInput("What is my indemnification and liability cap?")}
+                    className="px-2 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors"
+                  >
+                    Liability cap?
+                  </button>
+                  <button
+                    onClick={() => setUserInput("Is Net 90 with 30% holdback customary?")}
+                    className="px-2 py-1 rounded-lg bg-slate-950 border border-white/10 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-colors"
+                  >
+                    Holdback terms?
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
+                  {chatMessages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`p-3 rounded-2xl max-w-[90%] leading-relaxed ${
+                        msg.sender === "user"
+                          ? "ml-auto bg-cyan-500/20 text-cyan-100 border border-cyan-500/30"
+                          : "mr-auto bg-slate-950/80 text-slate-300 border border-white/5"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <input
+                    type="text"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                    placeholder="Ask a question about this contract..."
+                    className="flex-1 rounded-xl bg-slate-950 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none border border-white/10 focus:border-cyan-400"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black transition-all"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Interactive Chat Co-Pilot */}
-            <div className="rounded-3xl bg-slate-900/70 border border-white/10 p-5 space-y-4 flex flex-col h-[320px] shadow-2xl backdrop-blur-xl">
-              <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-                <MessageSquare className="w-4 h-4 text-cyan-400" />
-                <span className="font-bold text-xs text-white">Ask Legal AI Co-Pilot</span>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
-                {chatMessages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`p-3 rounded-2xl max-w-[90%] leading-relaxed ${
-                      msg.sender === "user"
-                        ? "ml-auto bg-cyan-500/20 text-cyan-100 border border-cyan-500/30"
-                        : "mr-auto bg-slate-950/80 text-slate-300 border border-white/5"
+            {/* TAB 3: CLAUSE RISK NAVIGATOR */}
+            {leftPanelTab === "navigator" && auditReport && (
+              <div className="rounded-3xl bg-slate-900/70 border border-white/10 p-5 space-y-3.5 shadow-2xl backdrop-blur-xl animate-in fade-in max-h-[560px] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div>
+                    <h3 className="font-bold text-xs text-white flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-cyan-400" /> Clause Risk Navigator
+                    </h3>
+                    <p className="text-[10px] text-slate-400">Click any clause to jump directly to it</p>
+                  </div>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-black ${
+                      auditReport.overallScore < 50
+                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                        : auditReport.overallScore < 85
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
                     }`}
                   >
-                    {msg.text}
-                  </div>
-                ))}
-              </div>
+                    {auditReport.overallScore}% Score
+                  </span>
+                </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-                <input
-                  type="text"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                  placeholder="Ask a question about this contract..."
-                  className="flex-1 rounded-xl bg-slate-950 px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none border border-white/10 focus:border-cyan-400"
-                />
-                <button
-                  onClick={handleSendMessage}
-                  className="p-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black transition-all"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
+                <div className="space-y-2">
+                  {auditReport.clauses.map((clause, idx) => (
+                    <button
+                      key={clause.id}
+                      onClick={() => scrollToClause(clause.id)}
+                      className="w-full text-left p-3 rounded-2xl bg-slate-950/80 hover:bg-slate-800/80 border border-white/5 hover:border-cyan-500/40 transition-all flex items-center justify-between gap-3 group"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                            {clause.category}
+                          </span>
+                          <span
+                            className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${
+                              clause.riskLevel === "CRITICAL"
+                                ? "bg-rose-500/20 text-rose-400"
+                                : clause.riskLevel === "WARNING"
+                                ? "bg-amber-500/20 text-amber-400"
+                                : "bg-emerald-500/20 text-emerald-400"
+                            }`}
+                          >
+                            {clause.riskLevel}
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-white truncate group-hover:text-cyan-300 transition-colors">
+                          {idx + 1}. {clause.title}
+                        </p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Sticky Compact HUD with Quick Actions */}
+            {auditReport && auditReport.isValidLegalDocument && (
+              <div className="p-3 rounded-2xl bg-slate-950/90 border border-white/10 flex items-center justify-between gap-2 text-xs backdrop-blur-md shadow-xl animate-in fade-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      auditReport.overallScore < 50
+                        ? "bg-rose-400 animate-pulse"
+                        : auditReport.overallScore < 85
+                        ? "bg-amber-400"
+                        : "bg-emerald-400"
+                    }`}
+                  />
+                  <div className="min-w-0">
+                    <p className="font-bold text-white truncate max-w-[150px] text-[11px] leading-tight">
+                      {contractTitle || "Legal Agreement"}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      Risk: <span className={auditReport.overallScore < 50 ? "text-rose-400 font-bold" : "text-amber-400 font-bold"}>{auditReport.overallScore}%</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => {
+                      downloadAmendedContractDoc({
+                        title: contractTitle,
+                        originalText: contractText,
+                        clauses: auditReport.clauses,
+                        auditReport: auditReport,
+                      });
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-bold text-[10px] border border-cyan-500/30 transition-all hover:scale-105 active:scale-95"
+                    title="Export Word Document (.DOC)"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Word (.DOC)</span>
+                  </button>
+
+                  <button
+                    onClick={handleNotarizeOnChain}
+                    disabled={isNotarizing}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[10px] shadow-sm shadow-emerald-500/30 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                    title="Notarize to Base Sepolia"
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span>Notarize</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Right Column: Clause Redlines, Score Card & Notarize Action */}
@@ -863,8 +1062,11 @@ export default function AuditorPage() {
                 {filteredClauses.map((clause) => (
                   <div
                     key={clause.id}
-                    className={`p-5 rounded-3xl bg-slate-900/70 border transition-all space-y-3.5 backdrop-blur-xl ${
-                      clause.riskLevel === "CRITICAL"
+                    id={`clause-${clause.id}`}
+                    className={`p-5 rounded-3xl bg-slate-900/70 border transition-all duration-300 space-y-3.5 backdrop-blur-xl scroll-mt-28 ${
+                      activeClauseHighlight === clause.id
+                        ? "ring-2 ring-cyan-400 border-cyan-400 shadow-[0_0_35px_rgba(6,182,212,0.4)] scale-[1.01]"
+                        : clause.riskLevel === "CRITICAL"
                         ? "border-rose-500/25 hover:border-rose-500/40"
                         : clause.riskLevel === "WARNING"
                         ? "border-amber-500/25 hover:border-amber-500/40"
