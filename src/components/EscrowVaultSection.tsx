@@ -29,11 +29,10 @@ export default function EscrowVaultSection() {
 
   const [escrows, setEscrows] = useState<any[]>([]);
   const [contractorsList, setContractorsList] = useState<ContractorProfile[]>(DEFAULT_CONTRACTORS);
-  const [agreementId, setAgreementId] = useState("");
-  const [contractorAddress, setContractorAddress] = useState(
-    "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2"
+  const [selectedContractor, setSelectedContractor] = useState<ContractorProfile | null>(
+    DEFAULT_CONTRACTORS[0]
   );
-  const [isAddressLocked, setIsAddressLocked] = useState(true);
+  const [agreementId, setAgreementId] = useState("");
   const [depositAmount, setDepositAmount] = useState("0.005");
   const [milestoneDesc, setMilestoneDesc] = useState(
     "Milestone 1: Web3 Legal Architecture & AI Audit Completion"
@@ -64,8 +63,8 @@ export default function EscrowVaultSection() {
       return;
     }
 
-    if (!contractorAddress || !depositAmount || !milestoneDesc) {
-      setErrorMessage("Please fill all required escrow fields.");
+    if (!selectedContractor || !depositAmount || !milestoneDesc) {
+      setErrorMessage("Please select a verified contractor and fill all required escrow fields.");
       return;
     }
 
@@ -75,6 +74,7 @@ export default function EscrowVaultSection() {
         agreementId.trim() ||
         "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
 
+      const contractorAddress = selectedContractor.walletAddress;
       const res = await depositToEscrow({
         agreementId: finalAgreementId,
         contractorAddress,
@@ -211,71 +211,69 @@ export default function EscrowVaultSection() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-slate-400">
-                  Contractor Wallet Address (Recipient)
+                  Select Verified Contractor (Recipient)
                 </label>
                 <Link
                   href="/contractors"
-                  className="text-cyan-400 hover:underline text-[11px] font-semibold"
+                  className="text-cyan-400 hover:underline text-[11px] font-semibold flex items-center gap-1"
                 >
-                  Browse Profiles →
+                  <Users className="w-3 h-3" />
+                  <span>Browse Profiles →</span>
                 </Link>
               </div>
 
-              {/* Quick Profile Selector Dropdown */}
+              {/* Verified Contractor Dropdown */}
               <div className="mb-2">
                 <select
+                  value={selectedContractor?.walletAddress || ""}
                   onChange={(e) => {
-                    if (e.target.value) {
-                      setContractorAddress(e.target.value);
-                      setIsAddressLocked(true);
-                    }
+                    const found = contractorsList.find((c) => c.walletAddress === e.target.value);
+                    setSelectedContractor(found || null);
                   }}
-                  className="w-full rounded-xl bg-slate-950 px-3 py-2 text-xs font-mono text-cyan-300 border border-white/10 focus:outline-none focus:border-cyan-500/50"
+                  required
+                  className="w-full rounded-xl bg-slate-950 px-3.5 py-2.5 text-xs font-semibold text-cyan-300 border border-cyan-500/30 focus:outline-none focus:border-cyan-400"
                 >
-                  <option value="">⚡ Select from Verified Contractors Directory...</option>
                   {contractorsList.map((c) => (
                     <option key={c.walletAddress} value={c.walletAddress}>
-                      {c.fullName} ({c.companyName}) — {c.walletAddress.slice(0, 6)}...{c.walletAddress.slice(-4)}
+                      {c.fullName} ({c.companyName}) — {c.roleTitle}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Lock Status Header */}
-              <div className="flex items-center justify-between mb-1.5 px-1">
-                {isAddressLocked ? (
-                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    <span>Verified Recipient Locked</span>
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                    <span>Manual Address (Editable)</span>
-                  </span>
-                )}
+              {/* Verified Recipient Bound Card (Zero Client Tampering) */}
+              {selectedContractor && (
+                <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-emerald-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Verified On-Chain Recipient
+                    </span>
+                    <span className="text-[11px] text-amber-300 font-mono font-bold">
+                      {selectedContractor.hourlyRateEth} ETH / Milestone
+                    </span>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsAddressLocked(!isAddressLocked)}
-                  className="text-[10px] text-slate-400 hover:text-cyan-300 underline font-semibold transition-colors"
-                >
-                  {isAddressLocked ? "Change / Unlock" : "Lock Address"}
-                </button>
-              </div>
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-white">
+                      {selectedContractor.fullName}{" "}
+                      <span className="text-slate-400 font-normal">
+                        · {selectedContractor.companyName}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-cyan-300 break-all bg-black/40 p-2 rounded-lg border border-white/5 flex items-center justify-between">
+                      <span>{selectedContractor.walletAddress}</span>
+                      <span className="text-[10px] text-emerald-400 font-sans font-bold flex items-center gap-1 shrink-0 ml-2">
+                        <Lock className="w-3 h-3" /> Locked
+                      </span>
+                    </div>
+                  </div>
 
-              <input
-                type="text"
-                value={contractorAddress}
-                onChange={(e) => setContractorAddress(e.target.value)}
-                readOnly={isAddressLocked}
-                placeholder="0x..."
-                required
-                className={`w-full rounded-xl px-3.5 py-2.5 text-xs font-mono border transition-all ${
-                  isAddressLocked
-                    ? "bg-slate-900/90 text-cyan-300 border-emerald-500/30 cursor-not-allowed selection:bg-transparent"
-                    : "bg-slate-950 text-slate-200 border-white/10 focus:outline-none focus:border-cyan-500/50"
-                }`}
-              />
+                  <p className="text-[10px] text-slate-500 flex items-center gap-1.5 pt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Cryptographically Bound: Payout is strictly locked to this verified contractor. Client cannot alter or redirect recipient funds.</span>
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

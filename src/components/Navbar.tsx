@@ -16,6 +16,8 @@ import {
 import { SUPPORTED_NETWORKS } from "@/lib/web3Service";
 import { useWeb3 } from "@/context/Web3Context";
 import WalletConnectModal from "@/components/WalletConnectModal";
+import TopUpModal from "@/components/TopUpModal";
+import { getUserCredits } from "@/lib/firestoreService";
 
 export default function Navbar() {
   const {
@@ -30,6 +32,13 @@ export default function Navbar() {
 
   const [showNetworkMenu, setShowNetworkMenu] = useState(false);
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
+  const [credits, setCredits] = useState(3);
+
+  // Load user credits on mount and whenever account changes
+  React.useEffect(() => {
+    setCredits(getUserCredits(account));
+  }, [account]);
 
   const currentNetwork =
     SUPPORTED_NETWORKS.find((n) => n.chainId === chainId) || SUPPORTED_NETWORKS[0];
@@ -136,6 +145,19 @@ export default function Navbar() {
               )}
             </div>
 
+            {/* Audit Credits Pill & Top-Up Modal Trigger */}
+            <button
+              onClick={() => setIsTopUpModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-300 text-xs font-semibold hover:bg-purple-500/20 transition-all hover:scale-105 active:scale-95 shadow-sm"
+              title="Click to Top Up AI Audit Credits"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>{credits} Audits</span>
+              <span className="text-[10px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-md font-bold">
+                + Top Up
+              </span>
+            </button>
+
             {/* Wallet Connect Status */}
             {account ? (
               <div className="flex items-center gap-2">
@@ -185,6 +207,13 @@ export default function Navbar() {
       <WalletConnectModal
         isOpen={isConnectModalOpen}
         onClose={() => setIsConnectModalOpen(false)}
+      />
+
+      {/* Audit Credits Top-Up Modal */}
+      <TopUpModal
+        isOpen={isTopUpModalOpen}
+        onClose={() => setIsTopUpModalOpen(false)}
+        onCreditsPurchased={(newTotal) => setCredits(newTotal)}
       />
     </>
   );

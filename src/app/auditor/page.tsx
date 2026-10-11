@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import CertificateModal from "@/components/CertificateModal";
+import TopUpModal from "@/components/TopUpModal";
 import {
   FileText,
   Sparkles,
@@ -19,6 +20,7 @@ import {
   ExternalLink,
   ChevronRight,
   Filter,
+  Zap,
 } from "lucide-react";
 import {
   SAMPLE_CONTRACTS,
@@ -30,6 +32,8 @@ import { notarizeDocumentOnChain, NotarizationResult } from "@/lib/web3Service";
 import {
   getSiteSettings,
   saveNotarizedContract,
+  getUserCredits,
+  deductUserCredit,
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/firestoreService";
@@ -45,7 +49,9 @@ export default function AuditorPage() {
   const [isNotarizing, setIsNotarizing] = useState(false);
   const [notarizationResult, setNotarizationResult] = useState<NotarizationResult | null>(null);
   const [isCertOpen, setIsCertOpen] = useState(false);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
+  const [credits, setCredits] = useState(3);
 
   // Chat with contract state
   const [chatMessages, setChatMessages] = useState<Array<{ sender: "user" | "ai"; text: string }>>([
@@ -60,15 +66,28 @@ export default function AuditorPage() {
     async function init() {
       const s = await getSiteSettings();
       setSettings(s);
+      setCredits(getUserCredits(account));
       // Run initial audit on load
       const report = await analyzeContract("Predatory Freelancer Agreement", contractText, s.geminiApiKey);
       setAuditReport(report);
     }
     init();
-  }, []);
+  }, [account]);
 
   const handleRunAudit = async () => {
     if (!contractText.trim()) return;
+
+    // Credit paywall check if enabled by Admin
+    if (settings.enableCreditPaywall) {
+      const available = getUserCredits(account);
+      if (available <= 0) {
+        setIsTopUpOpen(true);
+        return;
+      }
+      const updated = deductUserCredit(account);
+      setCredits(updated);
+    }
+
     setIsAuditing(true);
     setNotarizationResult(null);
 
@@ -434,6 +453,13 @@ export default function AuditorPage() {
         title={contractTitle}
         score={auditReport?.overallScore || 75}
         notary={notarizationResult}
+      />
+
+      {/* Audit Credits Top-Up Modal */}
+      <TopUpModal
+        isOpen={isTopUpOpen}
+        onClose={() => setIsTopUpOpen(false)}
+        onCreditsPurchased={(newTotal) => setCredits(newTotal)}
       />
     </div>
   );

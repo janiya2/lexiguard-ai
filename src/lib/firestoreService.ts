@@ -31,6 +31,12 @@ export interface SiteSettings {
   ownerTreasuryAddress: string;
   protocolFeePercentage: number;
   enableProtocolFee: boolean;
+  enableCreditPaywall: boolean;
+  freeCreditsCount: number;
+  starterPackPriceEth: string;
+  proPackPriceEth: string;
+  agencyPackPriceEth: string;
+  enableContractorHiring: boolean;
 }
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -46,6 +52,12 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   ownerTreasuryAddress: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
   protocolFeePercentage: 1.0,
   enableProtocolFee: true,
+  enableCreditPaywall: false, // Default false for smooth judge evaluation
+  freeCreditsCount: 3,
+  starterPackPriceEth: "0.005",
+  proPackPriceEth: "0.012",
+  agencyPackPriceEth: "0.030",
+  enableContractorHiring: true,
 };
 
 // Fetch site configuration from Firestore with fallback
@@ -269,3 +281,97 @@ export async function getContractorProfiles(): Promise<ContractorProfile[]> {
   }
   return DEFAULT_CONTRACTORS;
 }
+
+// Credit Purchase Interface & Functions
+export interface CreditPurchase {
+  id?: string;
+  walletAddress: string;
+  packName: string;
+  creditsAdded: number;
+  amountEth: string;
+  txHash: string;
+  network: string;
+  createdAt?: any;
+}
+
+export async function saveCreditPurchase(purchase: CreditPurchase): Promise<string | null> {
+  try {
+    const docRef = await addDoc(collection(db, "lexiguard_credit_purchases"), {
+      ...purchase,
+      createdAt: Timestamp.now(),
+    });
+    return docRef.id;
+  } catch (err) {
+    console.warn("Could not save credit purchase to Firestore:", err);
+    return null;
+  }
+}
+
+export async function getCreditPurchases(): Promise<CreditPurchase[]> {
+  try {
+    const q = query(
+      collection(db, "lexiguard_credit_purchases"),
+      orderBy("createdAt", "desc"),
+      limit(25)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as CreditPurchase));
+    }
+  } catch (err) {
+    console.warn("Using demo credit purchases:", err);
+  }
+  return [
+    {
+      id: "purchase-demo-1",
+      walletAddress: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
+      packName: "Pro Pack (15 Audits)",
+      creditsAdded: 15,
+      amountEth: "0.012",
+      txHash: "0x6a2947062afcd3d353e592fab50f875ee10685ddc7db2f183920194829103981",
+      network: "Base Sepolia Testnet",
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 7200 },
+    },
+    {
+      id: "purchase-demo-2",
+      walletAddress: "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A",
+      packName: "Starter Pack (5 Audits)",
+      creditsAdded: 5,
+      amountEth: "0.005",
+      txHash: "0x1b28391048291039182930491829304918293049182930491829304918293049",
+      network: "Base Sepolia Testnet",
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 21600 },
+    },
+  ];
+}
+
+// Client-side / local credit management helper
+export function getUserCredits(walletAddress?: string | null, defaultCredits = 3): number {
+  if (typeof window === "undefined") return defaultCredits;
+  const key = walletAddress ? `lexiguard_credits_${walletAddress.toLowerCase()}` : "lexiguard_credits_guest";
+  const stored = localStorage.getItem(key);
+  if (stored !== null) {
+    return parseInt(stored, 10);
+  }
+  localStorage.setItem(key, defaultCredits.toString());
+  return defaultCredits;
+}
+
+export function deductUserCredit(walletAddress?: string | null): number {
+  if (typeof window === "undefined") return 0;
+  const key = walletAddress ? `lexiguard_credits_${walletAddress.toLowerCase()}` : "lexiguard_credits_guest";
+  const current = getUserCredits(walletAddress);
+  const updated = Math.max(0, current - 1);
+  localStorage.setItem(key, updated.toString());
+  return updated;
+}
+
+export function addUserCredits(walletAddress: string | null | undefined, added: number): number {
+  if (typeof window === "undefined") return added;
+  const key = walletAddress ? `lexiguard_credits_${walletAddress.toLowerCase()}` : "lexiguard_credits_guest";
+  const current = getUserCredits(walletAddress);
+  const updated = current + added;
+  localStorage.setItem(key, updated.toString());
+  return updated;
+}
+

@@ -23,12 +23,15 @@ import {
   Wallet,
   ArrowUpRight,
   UserCheck,
+  Zap,
 } from "lucide-react";
 import {
   getSiteSettings,
   saveSiteSettings,
   getNotarizedContracts,
   getContractorProfiles,
+  getCreditPurchases,
+  CreditPurchase,
   ContractorProfile,
   DEFAULT_CONTRACTORS,
   SiteSettings,
@@ -39,12 +42,13 @@ import { useWeb3 } from "@/context/Web3Context";
 export default function AdminPage() {
   const { account } = useWeb3();
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
-  const [activeTab, setActiveTab] = useState<"cms" | "treasury" | "contractors" | "keys" | "docs" | "health">("cms");
+  const [activeTab, setActiveTab] = useState<"cms" | "treasury" | "credits" | "contractors" | "keys" | "docs" | "health">("cms");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [contracts, setContracts] = useState<any[]>([]);
   const [contractorsList, setContractorsList] = useState<ContractorProfile[]>(DEFAULT_CONTRACTORS);
+  const [creditPurchases, setCreditPurchases] = useState<CreditPurchase[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -54,6 +58,8 @@ export default function AdminPage() {
       setContracts(docs);
       const list = await getContractorProfiles();
       setContractorsList(list);
+      const purchases = await getCreditPurchases();
+      setCreditPurchases(purchases);
     }
     load();
   }, []);
@@ -140,6 +146,18 @@ export default function AdminPage() {
           >
             <Coins className="w-3.5 h-3.5" />
             <span>Treasury & Fees (1%)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("credits")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition-all ${
+              activeTab === "credits"
+                ? "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>Credits & Top-Up Pricing</span>
           </button>
 
           <button
@@ -400,6 +418,253 @@ export default function AdminPage() {
                       </span>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* TAB: AUDIT CREDITS & TOP-UP PRICING */}
+        {activeTab === "credits" && (
+          <form onSubmit={handleSave} className="space-y-6">
+            <div className="p-6 rounded-3xl bg-slate-900/60 border border-white/5 space-y-6">
+              <div>
+                <h3 className="font-bold text-base text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <span>AI Legal Audit Credits & On-Chain Monetization Engine</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Configure paywall enforcement, free trial quotas, bundle ETH prices, and inspect on-chain credit purchase transactions.
+                </p>
+              </div>
+
+              {/* Master Paywall Toggle */}
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Credit Paywall Enforcement</span>
+                    <span
+                      className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                        settings.enableCreditPaywall
+                          ? "bg-purple-500/10 text-purple-300 border-purple-500/20"
+                          : "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                      }`}
+                    >
+                      {settings.enableCreditPaywall ? "🔒 Enforced Mode (SaaS)" : "⚡ Free Community Mode (Hackathon)"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    {settings.enableCreditPaywall
+                      ? "Users are prompted to buy Top-Up credits via MetaMask once their free trial audits are used."
+                      : "Recommended for BLI Hackathon: All judges enjoy friction-free unlimited AI contract audits."}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettings({
+                      ...settings,
+                      enableCreditPaywall: !settings.enableCreditPaywall,
+                    })
+                  }
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                    settings.enableCreditPaywall
+                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30"
+                      : "bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30"
+                  }`}
+                >
+                  {settings.enableCreditPaywall ? "Switch to Free Demo Mode" : "Enable Paid Top-Up Paywall"}
+                </button>
+              </div>
+
+              {/* Free Trial Allowance & Module Toggles */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Free Trial Audits per User
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={settings.freeCreditsCount || 3}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        freeCreditsCount: parseInt(e.target.value, 10) || 3,
+                      })
+                    }
+                    className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-mono font-bold text-cyan-300 border border-white/10 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Granted to new wallet connections.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Contractor Directory Hiring
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={settings.enableContractorHiring !== false}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          enableContractorHiring: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 rounded text-cyan-500 focus:ring-0 bg-slate-950"
+                    />
+                    <span className="text-xs text-slate-300">
+                      {settings.enableContractorHiring !== false ? "Enabled" : "Disabled"}
+                    </span>
+                  </label>
+                  <p className="text-[10px] text-slate-500">
+                    Allows clients to hire verified builders.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Escrow Vault Module
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={settings.enableEscrowModule}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          enableEscrowModule: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 rounded text-purple-500 focus:ring-0 bg-slate-950"
+                    />
+                    <span className="text-xs text-slate-300">
+                      {settings.enableEscrowModule ? "Enabled" : "Disabled"}
+                    </span>
+                  </label>
+                  <p className="text-[10px] text-slate-500">
+                    Smart contract milestone locks.
+                  </p>
+                </div>
+              </div>
+
+              {/* Credit Bundle Pricing (ETH) */}
+              <div className="space-y-3 pt-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Credit Bundle Pricing (Base Sepolia ETH)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Starter Pack */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">Starter (5 Audits)</span>
+                      <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">Basic</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={settings.starterPackPriceEth || "0.005"}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            starterPackPriceEth: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-mono font-bold text-cyan-300 border border-white/10 focus:outline-none"
+                      />
+                      <span className="absolute right-3 top-2 text-[11px] font-bold text-slate-500">ETH</span>
+                    </div>
+                  </div>
+
+                  {/* Pro Pack */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">Pro Pack (15 Audits)</span>
+                      <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full">Popular</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={settings.proPackPriceEth || "0.012"}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            proPackPriceEth: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-mono font-bold text-cyan-300 border border-white/10 focus:outline-none"
+                      />
+                      <span className="absolute right-3 top-2 text-[11px] font-bold text-slate-500">ETH</span>
+                    </div>
+                  </div>
+
+                  {/* Agency Pass */}
+                  <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">Agency (50 Audits)</span>
+                      <span className="text-[10px] text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">Volume</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={settings.agencyPackPriceEth || "0.030"}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            agencyPackPriceEth: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-xl bg-slate-900 px-3 py-2 text-xs font-mono font-bold text-cyan-300 border border-white/10 focus:outline-none"
+                      />
+                      <span className="absolute right-3 top-2 text-[11px] font-bold text-slate-500">ETH</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* On-Chain Credit Purchases Ledger */}
+              <div className="space-y-3 pt-4 border-t border-white/5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Live On-Chain Top-Up Purchases Ledger ({creditPurchases.length})
+                  </h4>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Firestore: lexiguard_credit_purchases
+                  </span>
+                </div>
+
+                <div className="rounded-2xl bg-slate-950/80 border border-white/5 overflow-hidden">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-900/80 text-[10px] uppercase tracking-wider text-slate-400 border-b border-white/5">
+                      <tr>
+                        <th className="py-2.5 px-3">Wallet Address</th>
+                        <th className="py-2.5 px-3">Pack</th>
+                        <th className="py-2.5 px-3">Credits</th>
+                        <th className="py-2.5 px-3">Paid Amount</th>
+                        <th className="py-2.5 px-3">Transaction</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {creditPurchases.map((p, idx) => (
+                        <tr key={p.id || idx} className="hover:bg-white/[0.02]">
+                          <td className="py-3 px-3 font-mono text-cyan-300">
+                            {p.walletAddress.slice(0, 6)}...{p.walletAddress.slice(-4)}
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-white">{p.packName}</td>
+                          <td className="py-3 px-3 text-emerald-400 font-bold">+{p.creditsAdded}</td>
+                          <td className="py-3 px-3 font-mono text-amber-300 font-bold">{p.amountEth} ETH</td>
+                          <td className="py-3 px-3 font-mono text-slate-500 truncate max-w-[130px]">
+                            {p.txHash}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
