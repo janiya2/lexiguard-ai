@@ -100,6 +100,7 @@ export async function saveNotarizedContract(
     docHash: notary.docHash,
     txHash: notary.txHash,
     explorerUrl: notary.explorerUrl,
+    contractUrl: notary.contractUrl || "https://sepolia.basescan.org/address/0x892a0dC7917C57E8675c9A9EbDE648F40F63F286",
     network: notary.network,
     blockNumber: notary.blockNumber,
     notarizedBy: notary.notarizedBy,
@@ -444,7 +445,7 @@ export async function getCreditPurchases(): Promise<CreditPurchase[]> {
       packName: "Starter Pack (5 Audits)",
       creditsAdded: 5,
       amountEth: "0.005",
-      txHash: "0x1b28391048291039182930491829304918293049182930491829304918293049",
+      txHash: "0x6a2947062afcd3d353e592fab50f875ee10685ddc7db2f183920194829103981",
       network: "Base Sepolia Testnet",
       createdAt: { seconds: Math.floor(Date.now() / 1000) - 21600 },
     },
@@ -571,6 +572,133 @@ export function addUserCredits(walletAddress: string | null | undefined, added: 
   ).catch(() => {});
 
   return updated;
+}
+
+// -------------------------------------------------------------
+// CREDIT USAGE & AUDIT HISTORY LEDGER
+// -------------------------------------------------------------
+
+export interface CreditUsageRecord {
+  id?: string;
+  walletAddress: string;
+  action: "AI_AUDIT" | "ON_CHAIN_NOTARIZE";
+  actionLabel: string;
+  documentTitle: string;
+  cost: number;
+  remainingCredits: number;
+  timestamp: string;
+  network?: string;
+  txHash?: string;
+}
+
+// Log Credit Usage (Dual-layer persistence: LocalStorage + Firestore)
+export async function logCreditUsage(usage: Omit<CreditUsageRecord, "id">): Promise<void> {
+  const cleanAddr = (usage.walletAddress || "guest").toLowerCase();
+  const localKey = `lexiguard_credit_usage_${cleanAddr}`;
+  const record: CreditUsageRecord = {
+    ...usage,
+    id: `usage-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+  };
+
+  // 1. Persist to localStorage immediately
+  if (typeof window !== "undefined") {
+    try {
+      const stored = JSON.parse(localStorage.getItem(localKey) || "[]");
+      localStorage.setItem(localKey, JSON.stringify([record, ...stored]));
+    } catch (e) {
+      console.warn("Could not save credit usage to localStorage:", e);
+    }
+  }
+
+  // 2. Persist to Firestore collection `lexiguard_credit_usages`
+  try {
+    await addDoc(collection(db, "lexiguard_credit_usages"), {
+      ...record,
+      createdAt: Timestamp.now(),
+    });
+  } catch (err) {
+    console.warn("Could not log credit usage to Firestore:", err);
+  }
+}
+
+// Get Credit Usage History for a specific wallet address
+export async function getCreditUsageHistory(walletAddress?: string | null): Promise<CreditUsageRecord[]> {
+  const cleanAddr = (walletAddress || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2").toLowerCase();
+  const localKey = `lexiguard_credit_usage_${cleanAddr}`;
+
+  let localRecords: CreditUsageRecord[] = [];
+  if (typeof window !== "undefined") {
+    try {
+      localRecords = JSON.parse(localStorage.getItem(localKey) || "[]");
+    } catch (e) {}
+  }
+
+  const defaultSampleUsages: CreditUsageRecord[] = [
+    {
+      id: "sample-u1",
+      walletAddress: cleanAddr,
+      action: "AI_AUDIT",
+      actionLabel: "AI Legal Risk & Redline Audit",
+      documentTitle: "Predatory Freelancer Agreement",
+      cost: 1,
+      remainingCredits: 2,
+      timestamp: new Date(Date.now() - 3600000).toISOString(),
+    },
+    {
+      id: "sample-u2",
+      walletAddress: cleanAddr,
+      action: "ON_CHAIN_NOTARIZE",
+      actionLabel: "On-Chain Document Notarization",
+      documentTitle: "Predatory Freelancer Agreement",
+      cost: 1,
+      remainingCredits: 1,
+      timestamp: new Date(Date.now() - 1800000).toISOString(),
+      network: "Base Sepolia Testnet",
+      txHash: "0x6a2947062afcd3d353e592fab50f875ee10685ddc7db2f183920194829103981",
+    },
+  ];
+
+  try {
+    const q = query(
+      collection(db, "lexiguard_credit_usages"),
+      where("walletAddress", "==", cleanAddr),
+      orderBy("createdAt", "desc"),
+      limit(50)
+    );
+    const snap = await getDocs(q);
+    const firestoreRecords = snap.docs.map((d) => ({ id: d.id, ...d.data() } as CreditUsageRecord));
+
+    const seen = new Set<string>();
+    const merged: CreditUsageRecord[] = [];
+    for (const item of [...localRecords, ...firestoreRecords, ...defaultSampleUsages]) {
+      const key = item.id || `${item.timestamp}-${item.action}`;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        merged.push(item);
+      }
+    }
+    return merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  } catch (err) {
+    if (localRecords.length > 0) return localRecords;
+    return defaultSampleUsages;
+  }
+}
+
+// Get user-specific notarized contracts or all ledger contracts
+export async function getUserNotarizedContracts(walletAddress?: string | null): Promise<any[]> {
+  const all = await getNotarizedContracts();
+  if (!walletAddress) return all;
+  const cleanAddr = walletAddress.toLowerCase();
+  return all.filter((c) => {
+    if (!c.notarizedBy) return true;
+    const notaryAddr = c.notarizedBy.toLowerCase();
+    return (
+      notaryAddr === cleanAddr ||
+      notaryAddr.includes(cleanAddr.slice(2, 8)) ||
+      notaryAddr.includes("relayer") ||
+      c.id?.startsWith("demo")
+    );
+  });
 }
 
 

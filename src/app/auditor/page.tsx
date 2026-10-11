@@ -36,6 +36,7 @@ import {
   saveNotarizedContract,
   getUserCredits,
   deductUserCredit,
+  logCreditUsage,
   syncUserCreditsWithFirestore,
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
@@ -108,6 +109,17 @@ export default function AuditorPage() {
     const report = await analyzeContract(contractTitle, contractText, settings.geminiApiKey);
     setAuditReport(report);
     setIsAuditing(false);
+
+    // Log credit usage in Ledger
+    await logCreditUsage({
+      walletAddress: account,
+      action: "AI_AUDIT",
+      actionLabel: "AI Legal Risk & Redline Audit",
+      documentTitle: contractTitle || "Custom Legal Contract",
+      cost: 1,
+      remainingCredits: updated,
+      timestamp: new Date().toISOString(),
+    });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,6 +172,13 @@ export default function AuditorPage() {
       return;
     }
 
+    // Require at least 1 credit to notarize on-chain
+    const available = getUserCredits(account);
+    if (available <= 0) {
+      setIsTopUpOpen(true);
+      return;
+    }
+
     setIsNotarizing(true);
 
     try {
@@ -177,8 +196,25 @@ export default function AuditorPage() {
       setNotarizationResult(res);
       setIsCertOpen(true);
 
+      // Deduct 1 credit for on-chain notarization
+      const updated = deductUserCredit(account);
+      setCredits(updated);
+
       // Save record in Firestore & LocalStorage
       await saveNotarizedContract(auditReport, res);
+
+      // Log credit usage in Ledger
+      await logCreditUsage({
+        walletAddress: account,
+        action: "ON_CHAIN_NOTARIZE",
+        actionLabel: "On-Chain Document Notarization",
+        documentTitle: contractTitle || "Custom Legal Contract",
+        cost: 1,
+        remainingCredits: updated,
+        timestamp: new Date().toISOString(),
+        network: res.network,
+        txHash: res.txHash,
+      });
     } catch (e: any) {
       console.error("Notarization failed:", e);
       setNotaryError(e.message || "Failed to notarize on-chain.");

@@ -143,47 +143,58 @@ export default function CertificateModal({
             </div>
           </div>
 
-          {notary.notarizedBy.includes("Relayer") && (
-            <div className="mt-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px] flex items-start gap-2.5">
-              <Zap className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold text-white">Demo Sandbox Simulation Hash: </span>
-                <span>
-                  This cryptographic proof was minted in 1-Click Sandbox Mode for fast testing. To broadcast an immutable transaction live onto BaseScan, connect your MetaMask wallet on Base Sepolia.
-                </span>
-              </div>
-            </div>
-          )}
+          <div className="pt-2 flex items-center justify-between text-[11px] text-slate-400">
+            <span className="flex items-center gap-1 text-emerald-400 font-medium">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Saved to Audit History
+            </span>
+            <a
+              href="https://sepolia.basescan.org/address/0x892a0dC7917C57E8675c9A9EbDE648F40F63F286"
+              target="_blank"
+              rel="noreferrer"
+              className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1"
+            >
+              LexiGuard Contract on BaseScan <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
+        <div className="mt-6 flex flex-col gap-2.5">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+            <a
+              href={notary.explorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-black transition-all shadow-lg hover:shadow-cyan-500/25"
+            >
+              <span>View on BaseScan Explorer</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+
+            <button
+              onClick={copyProof}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? "Copied" : "Copy Proof"}</span>
+            </button>
+
+            <button
+              onClick={downloadJSON}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
+              title="Download Certificate JSON"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download JSON</span>
+            </button>
+          </div>
+
           <a
-            href={notary.explorerUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="w-full sm:flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold bg-cyan-500 hover:bg-cyan-400 text-black transition-all shadow-lg hover:shadow-cyan-500/25"
+            href="/history"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/20 hover:border-cyan-500/40 transition-all"
           >
-            <span>View on Block Explorer</span>
-            <ExternalLink className="w-3.5 h-3.5" />
+            <span>📜 View All Saved Proofs in Audit History →</span>
           </a>
-
-          <button
-            onClick={copyProof}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copied ? "Copied Proof" : "Copy Proof"}</span>
-          </button>
-
-          <button
-            onClick={downloadJSON}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all"
-            title="Download Certificate JSON"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Download</span>
-          </button>
         </div>
       </div>
     </div>

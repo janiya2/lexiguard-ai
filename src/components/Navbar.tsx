@@ -12,6 +12,7 @@ import {
   Zap,
   Coins,
   LogOut,
+  ScrollText,
 } from "lucide-react";
 import { SUPPORTED_NETWORKS } from "@/lib/web3Service";
 import { useWeb3 } from "@/context/Web3Context";
@@ -100,6 +101,13 @@ export default function Navbar() {
               className="px-3.5 py-2 text-sm font-medium text-slate-300 hover:text-white rounded-xl hover:bg-white/5 transition-all"
             >
               Contractors
+            </Link>
+            <Link
+              href="/history"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-300 hover:text-cyan-300 rounded-xl hover:bg-white/5 transition-all"
+            >
+              <ScrollText className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Audit History</span>
             </Link>
           </nav>
 
