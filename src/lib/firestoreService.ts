@@ -390,12 +390,15 @@ export async function getContractorProfiles(): Promise<ContractorProfile[]> {
 export interface CreditPurchase {
   id?: string;
   walletAddress: string;
-  packName: string;
+  packName?: string;
+  packageName?: string;
   creditsAdded: number;
-  amountEth: string;
+  amountEth?: string;
+  ethAmount?: string;
   txHash: string;
   network: string;
   createdAt?: any;
+  timestamp?: string;
 }
 
 export async function saveCreditPurchase(purchase: CreditPurchase): Promise<string | null> {

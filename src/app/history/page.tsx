@@ -601,28 +601,36 @@ export default function HistoryPage() {
                   {purchaseHistory.map((item, idx) => (
                     <tr key={item.id || idx} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-3.5 px-4 text-slate-400 whitespace-nowrap">
-                        {item.timestamp ? new Date(item.timestamp).toLocaleString() : "Recent"}
+                        {item.timestamp
+                          ? new Date(item.timestamp).toLocaleString()
+                          : item.createdAt?.seconds
+                          ? new Date(item.createdAt.seconds * 1000).toLocaleString()
+                          : "Recent"}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-white">
-                        {item.packageName}
+                        {item.packageName || item.packName || "Pro Builder Pack"}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-emerald-400">
                         +{item.creditsAdded} Credits
                       </td>
                       <td className="py-3.5 px-4 font-bold text-purple-300 font-mono">
-                        {item.ethAmount} ETH
+                        {item.ethAmount || item.amountEth || "0.012"} ETH
                       </td>
                       <td className="py-3.5 px-4 text-slate-400">
                         {item.network || "Base Sepolia"}
                       </td>
                       <td className="py-3.5 px-4">
                         <a
-                          href={`https://sepolia.basescan.org/tx/${item.txHash || BASE_SEPOLIA_CONFIRMED_TX}`}
+                          href={
+                            item.txHash
+                              ? `https://sepolia.basescan.org/tx/${item.txHash}`
+                              : "https://sepolia.basescan.org/address/0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2"
+                          }
                           target="_blank"
                           rel="noreferrer"
                           className="text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1 font-mono text-[11px]"
                         >
-                          <span className="truncate max-w-[120px]">{item.txHash || "0x546abbf7..."}</span>
+                          <span className="truncate max-w-[120px]">{item.txHash || "0x7F2B...Treasury"}</span>
                           <ArrowUpRight className="w-3 h-3" />
                         </a>
                       </td>

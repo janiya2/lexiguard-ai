@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   RefreshCw,
   ExternalLink,
-  Coins,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useWeb3 } from "@/context/Web3Context";
@@ -45,6 +44,7 @@ export default function TopUpModal({
     explorerUrl: string;
     credits: number;
     packName: string;
+    isRealOnChain: boolean;
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentCredits, setCurrentCredits] = useState(3);
@@ -92,34 +92,47 @@ export default function TopUpModal({
 
   const selectedPack = packs[selectedPackIndex];
 
-  const handleBuy = async () => {
-    if (!account) {
-      const res = await connectMetaMask();
-      if (!res.success) {
-        setErrorMessage(res.error || "Please connect a Web3 wallet first to complete purchase.");
-        return;
-      }
-    }
-
+  // 1. Pay with MetaMask (Sends REAL live transaction to Base Sepolia testnet)
+  const handleBuyWithMetaMask = async () => {
     setIsPurchasing(true);
     setErrorMessage(null);
 
     try {
+      if (typeof window === "undefined" || !(window as any).ethereum) {
+        throw new Error(
+          "MetaMask extension is not detected in your browser. Please install MetaMask or use 'Instant Sandbox Top-Up' below."
+        );
+      }
+
+      let activeAccount = account;
+      // If not connected via MetaMask, connect now
+      if (connectionType !== "metamask" || !activeAccount) {
+        const connectRes = await connectMetaMask();
+        if (!connectRes.success) {
+          throw new Error(connectRes.error || "MetaMask connection was rejected.");
+        }
+        const accounts = await (window as any).ethereum.request({ method: "eth_accounts" });
+        activeAccount = accounts && accounts[0] ? accounts[0] : null;
+      }
+
+      if (!activeAccount) {
+        throw new Error("No active MetaMask wallet account found.");
+      }
+
       const treasury = settings.ownerTreasuryAddress || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
       const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
-      const isMetaMask = connectionType === "metamask";
 
       const res = await purchaseAuditCreditsOnChain(
         selectedPack.priceEth,
         treasury,
-        account || undefined,
+        activeAccount,
         networkKey,
-        isMetaMask
+        true // isMetaMask = true -> Triggers real eth_sendTransaction in MetaMask!
       );
 
-      // Record in Firestore & LocalStorage
+      // Save to Firestore and LocalStorage
       await saveCreditPurchase({
-        walletAddress: account || "0x7F2B...DEMO",
+        walletAddress: activeAccount,
         packName: selectedPack.name,
         creditsAdded: selectedPack.credits,
         amountEth: selectedPack.priceEth,
@@ -128,13 +141,13 @@ export default function TopUpModal({
       });
 
       // Update user credits
-      const updatedTotal = addUserCredits(account, selectedPack.credits);
+      const updatedTotal = addUserCredits(activeAccount, selectedPack.credits);
       setCurrentCredits(updatedTotal);
 
-      // Fire confetti
+      // Confetti celebration
       confetti({
-        particleCount: 60,
-        spread: 70,
+        particleCount: 70,
+        spread: 80,
         colors: ["#06b6d4", "#a855f7", "#10b981"],
       });
 
@@ -143,14 +156,76 @@ export default function TopUpModal({
         explorerUrl: res.explorerUrl,
         credits: selectedPack.credits,
         packName: selectedPack.name,
+        isRealOnChain: true,
       });
 
       if (onCreditsPurchased) {
         onCreditsPurchased(updatedTotal);
       }
     } catch (err: any) {
-      console.error("Top-up purchase failed:", err);
-      setErrorMessage(err.message || "Failed to complete transaction.");
+      console.error("MetaMask purchase failed:", err);
+      let msg = err.message || "Failed to complete transaction.";
+      if (msg.toLowerCase().includes("insufficient funds")) {
+        msg = `Insufficient Base Sepolia ETH in your MetaMask wallet for ${selectedPack.priceEth} ETH + gas fee. You can use 'Instant Sandbox Top-Up' below to test with zero gas!`;
+      }
+      setErrorMessage(msg);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  // 2. Instant Sandbox Demo Top-Up (Zero Gas test for judges/visitors)
+  const handleBuySandbox = async () => {
+    setIsPurchasing(true);
+    setErrorMessage(null);
+
+    try {
+      const treasury = settings.ownerTreasuryAddress || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
+      const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
+      const targetAccount = account || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
+
+      const res = await purchaseAuditCreditsOnChain(
+        selectedPack.priceEth,
+        treasury,
+        targetAccount,
+        networkKey,
+        false // Sandbox mode
+      );
+
+      // Save to Firestore and LocalStorage
+      await saveCreditPurchase({
+        walletAddress: targetAccount,
+        packName: selectedPack.name,
+        creditsAdded: selectedPack.credits,
+        amountEth: selectedPack.priceEth,
+        txHash: res.txHash,
+        network: "Base Sepolia Testnet (Sandbox Demo)",
+      });
+
+      // Update user credits
+      const updatedTotal = addUserCredits(targetAccount, selectedPack.credits);
+      setCurrentCredits(updatedTotal);
+
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        colors: ["#a855f7", "#06b6d4", "#eab308"],
+      });
+
+      setPurchaseSuccess({
+        txHash: res.txHash,
+        explorerUrl: res.explorerUrl,
+        credits: selectedPack.credits,
+        packName: selectedPack.name,
+        isRealOnChain: false,
+      });
+
+      if (onCreditsPurchased) {
+        onCreditsPurchased(updatedTotal);
+      }
+    } catch (err: any) {
+      console.error("Sandbox top-up failed:", err);
+      setErrorMessage(err.message || "Failed to complete sandbox top-up.");
     } finally {
       setIsPurchasing(false);
     }
@@ -159,7 +234,6 @@ export default function TopUpModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <div className="relative w-full max-w-lg rounded-3xl bg-[#090d1a] border border-cyan-500/30 p-6 sm:p-8 shadow-[0_0_50px_-10px_rgba(6,182,212,0.3)] space-y-6">
-        
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -185,8 +259,10 @@ export default function TopUpModal({
         {/* Current Balance Bar */}
         <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/5 flex items-center justify-between text-xs">
           <span className="text-slate-400">
-            {account
-              ? `Connected Wallet (${account.slice(0, 6)}...${account.slice(-4)}):`
+            {connectionType === "metamask" && account
+              ? `MetaMask Wallet (${account.slice(0, 6)}...${account.slice(-4)}):`
+              : account
+              ? `Session Wallet (${account.slice(0, 6)}...${account.slice(-4)}):`
               : "Wallet Status:"}
           </span>
           {account ? (
@@ -204,42 +280,103 @@ export default function TopUpModal({
 
         {/* Error Alert */}
         {errorMessage && (
-          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
-            {errorMessage}
+          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs space-y-1">
+            <div className="font-bold flex items-center gap-1.5">
+              <span>⚠️ Action Required:</span>
+            </div>
+            <p className="leading-relaxed">{errorMessage}</p>
           </div>
         )}
 
         {/* Success State */}
         {purchaseSuccess ? (
-          <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-3">
-            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-            <div>
-              <h4 className="text-sm font-bold text-white">
-                +{purchaseSuccess.credits} Credits Added Successfully!
-              </h4>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {purchaseSuccess.packName} credited to your wallet session.
-              </p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-[11px] font-mono text-cyan-300 break-all flex items-center justify-between">
-              <span className="truncate max-w-[280px]">TX: {purchaseSuccess.txHash}</span>
+          purchaseSuccess.isRealOnChain ? (
+            <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-3.5">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+              <div>
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold uppercase tracking-wider mb-1.5">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  <span>Verified Live On-Chain Broadcast</span>
+                </div>
+                <h4 className="text-base font-black text-white">
+                  +{purchaseSuccess.credits} Audit Credits Added!
+                </h4>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Transaction confirmed and mined live on Base Sepolia.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-black/60 border border-emerald-500/30 text-[11px] font-mono text-cyan-300 break-all flex flex-col gap-1.5 text-left">
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <span>LIVE TRANSACTION HASH:</span>
+                  <span className="text-emerald-400 font-bold">Mined Just Now</span>
+                </div>
+                <span className="text-slate-200 select-all font-mono text-[10px]">
+                  {purchaseSuccess.txHash}
+                </span>
+              </div>
+
               <a
                 href={purchaseSuccess.explorerUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-cyan-400 hover:underline flex items-center gap-0.5 ml-2 shrink-0 font-sans font-semibold"
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
               >
-                <span>BaseScan</span>
-                <ExternalLink className="w-3 h-3" />
+                <span>View Live Transaction on BaseScan</span>
+                <ExternalLink className="w-3.5 h-3.5" />
               </a>
+
+              <button
+                onClick={onClose}
+                className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-semibold text-xs transition-all"
+              >
+                Continue Auditing Contracts
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="w-full mt-2 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all"
-            >
-              Continue Auditing Contracts
-            </button>
-          </div>
+          ) : (
+            <div className="p-5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-center space-y-3.5">
+              <CheckCircle2 className="w-10 h-10 text-cyan-400 mx-auto" />
+              <div>
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold uppercase tracking-wider mb-1.5">
+                  <Zap className="w-3 h-3 text-cyan-400" />
+                  <span>Instant Sandbox Demo Top-Up</span>
+                </div>
+                <h4 className="text-base font-black text-white">
+                  +{purchaseSuccess.credits} Credits Added to Session!
+                </h4>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Zero gas demo credits granted for hackathon evaluation.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-black/60 border border-white/10 text-[11px] font-mono text-slate-300 break-all flex flex-col gap-1 text-left">
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <span>INNOXPERT TREASURY:</span>
+                  <span className="text-cyan-400">Base Sepolia</span>
+                </div>
+                <span className="text-slate-200 select-all font-mono text-[10px]">
+                  {settings.ownerTreasuryAddress}
+                </span>
+              </div>
+
+              <a
+                href={purchaseSuccess.explorerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-2.5 px-4 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+              >
+                <span>View Treasury on BaseScan</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <button
+                onClick={onClose}
+                className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-semibold text-xs transition-all"
+              >
+                Continue Auditing Contracts
+              </button>
+            </div>
+          )
         ) : (
           <>
             {/* Package Selection Cards */}
@@ -295,44 +432,50 @@ export default function TopUpModal({
               </span>
             </div>
 
-            {/* Purchase CTA */}
-            <button
-              onClick={handleBuy}
-              disabled={isPurchasing}
-              className="w-full py-3.5 rounded-xl font-bold text-xs bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white shadow-[0_0_30px_-5px_rgba(6,182,212,0.5)] transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isPurchasing ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>
-                    {connectionType === "metamask"
-                      ? "Waiting for MetaMask Confirmation..."
-                      : "Confirming On-Chain Transfer..."}
-                  </span>
-                </>
-              ) : connectionType === "metamask" ? (
-                <>
-                  <span className="text-sm">🦊</span>
-                  <span>
-                    Pay with MetaMask ({selectedPack.priceEth} ETH — +{selectedPack.credits} Audits)
-                  </span>
-                </>
-              ) : connectionType === "gasless_relayer" ? (
-                <>
-                  <Zap className="w-4 h-4 text-purple-300" />
-                  <span>
-                    Top Up via Gasless Relayer ({selectedPack.priceEth} ETH — +{selectedPack.credits} Audits)
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Wallet className="w-4 h-4" />
-                  <span>
-                    Connect Wallet & Top Up ({selectedPack.priceEth} ETH)
-                  </span>
-                </>
-              )}
-            </button>
+            {/* Dual Purchase Actions */}
+            <div className="space-y-2.5 pt-1">
+              {/* Option 1: Live MetaMask On-Chain */}
+              <button
+                onClick={handleBuyWithMetaMask}
+                disabled={isPurchasing}
+                className="w-full py-3.5 rounded-xl font-bold text-xs bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold shadow-[0_0_30px_-5px_rgba(245,158,11,0.5)] transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isPurchasing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-black" />
+                    <span>Broadcasting Live via MetaMask...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-base">🦊</span>
+                    <span>
+                      Pay with MetaMask ({selectedPack.priceEth} ETH — Live BaseScan Broadcast)
+                    </span>
+                  </>
+                )}
+              </button>
+
+              {/* Divider */}
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-white/10"></div>
+                <span className="flex-shrink mx-3 text-[10px] text-slate-500 uppercase tracking-widest font-semibold">
+                  Or Test Without Gas
+                </span>
+                <div className="flex-grow border-t border-white/10"></div>
+              </div>
+
+              {/* Option 2: Instant Sandbox Demo */}
+              <button
+                onClick={handleBuySandbox}
+                disabled={isPurchasing}
+                className="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-900/90 hover:bg-slate-800/90 border border-cyan-500/30 hover:border-cyan-400 text-cyan-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <span>
+                  Instant Sandbox Top-Up (Zero Gas Demo — +{selectedPack.credits} Audits)
+                </span>
+              </button>
+            </div>
           </>
         )}
       </div>

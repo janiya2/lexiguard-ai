@@ -189,7 +189,9 @@ export default function Navbar() {
                     {connectionType === "metamask" ? (
                       <span title="Connected with MetaMask">🦊</span>
                     ) : (
-                      <Zap className="w-3.5 h-3.5 text-purple-400" title="Connected with Gasless Relayer" />
+                      <span title="Connected with Gasless Relayer">
+                        <Zap className="w-3.5 h-3.5 text-purple-400" />
+                      </span>
                     )}
                     <span>
                       {account.slice(0, 6)}...{account.slice(-4)}

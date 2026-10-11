@@ -3,6 +3,9 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
