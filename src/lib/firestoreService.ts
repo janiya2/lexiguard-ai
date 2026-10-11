@@ -195,3 +195,77 @@ export async function getEscrowAgreements(): Promise<any[]> {
     ];
   }
 }
+
+// Contractor Profile Interface
+export interface ContractorProfile {
+  id?: string;
+  walletAddress: string;
+  fullName: string;
+  companyName: string;
+  roleTitle: string;
+  bio: string;
+  skills: string[];
+  hourlyRateEth: string;
+  reputationScore: number;
+  verifiedOnChain: boolean;
+  githubOrPortfolio?: string;
+  createdAt?: any;
+}
+
+export const DEFAULT_CONTRACTORS: ContractorProfile[] = [
+  {
+    id: "innoxpert-lead",
+    walletAddress: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
+    fullName: "Janitha Dilshan",
+    companyName: "InnoXpert Studio",
+    roleTitle: "Lead Full-Stack Web3 & AI Solutions Architect",
+    bio: "Specializing in low-latency AI agents, EVM smart contracts, Next.js full-stack systems, and secure escrow architectures.",
+    skills: ["Solidity", "Next.js", "AI Agents", "EVM Escrow", "TypeScript"],
+    hourlyRateEth: "0.025",
+    reputationScore: 98,
+    verifiedOnChain: true,
+    githubOrPortfolio: "https://innoxpert.com",
+  },
+  {
+    id: "legaltech-auditor",
+    walletAddress: "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A",
+    fullName: "Alex Rivera, Esq.",
+    companyName: "Cogent Legal DAO",
+    roleTitle: "Web3 Legal Engineer & Clause Auditor",
+    bio: "Cross-border token advisory, smart contract compliance audits, and IP protection under Delaware and Swiss law.",
+    skills: ["Legal Engineering", "IP Licensing", "DAO Governance", "Compliance"],
+    hourlyRateEth: "0.040",
+    reputationScore: 95,
+    verifiedOnChain: true,
+    githubOrPortfolio: "https://github.com/cogent-legal",
+  },
+];
+
+// Save or Update Contractor Profile
+export async function saveContractorProfile(profile: ContractorProfile): Promise<boolean> {
+  try {
+    const docId = profile.walletAddress.toLowerCase();
+    await setDoc(doc(db, "lexiguard_contractors", docId), {
+      ...profile,
+      updatedAt: Timestamp.now(),
+    }, { merge: true });
+    return true;
+  } catch (err) {
+    console.warn("Could not save contractor profile to Firestore:", err);
+    return false;
+  }
+}
+
+// Fetch all Contractor Profiles
+export async function getContractorProfiles(): Promise<ContractorProfile[]> {
+  try {
+    const q = query(collection(db, "lexiguard_contractors"), limit(30));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ContractorProfile));
+    }
+  } catch (err) {
+    console.warn("Using default verified contractors:", err);
+  }
+  return DEFAULT_CONTRACTORS;
+}

@@ -81,6 +81,12 @@ export default function Navbar() {
               Notary & Escrow Vault
             </Link>
             <Link
+              href="/contractors"
+              className="px-3.5 py-2 text-sm font-medium text-slate-300 hover:text-white rounded-xl hover:bg-white/5 transition-all"
+            >
+              Contractors
+            </Link>
+            <Link
               href="/admin"
               className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/20 transition-all"
             >

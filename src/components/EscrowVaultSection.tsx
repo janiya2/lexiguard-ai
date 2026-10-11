@@ -1,6 +1,5 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Lock,
   Unlock,
@@ -13,18 +12,23 @@ import {
   Copy,
   Check,
   Zap,
+  Users,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useWeb3, LEXIGUARD_CONTRACT_ADDRESS } from "@/context/Web3Context";
 import {
   saveEscrowDeposit,
   getEscrowAgreements,
+  getContractorProfiles,
+  DEFAULT_CONTRACTORS,
+  ContractorProfile,
 } from "@/lib/firestoreService";
 
 export default function EscrowVaultSection() {
   const { account, balance, connectionType, depositToEscrow, networkName } = useWeb3();
 
   const [escrows, setEscrows] = useState<any[]>([]);
+  const [contractorsList, setContractorsList] = useState<ContractorProfile[]>(DEFAULT_CONTRACTORS);
   const [agreementId, setAgreementId] = useState("");
   const [contractorAddress, setContractorAddress] = useState(
     "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A"
@@ -42,6 +46,9 @@ export default function EscrowVaultSection() {
     async function load() {
       const records = await getEscrowAgreements();
       setEscrows(records);
+
+      const list = await getContractorProfiles();
+      setContractorsList(list);
     }
     load();
   }, []);
@@ -201,9 +208,37 @@ export default function EscrowVaultSection() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-                Contractor Wallet Address (Recipient)
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-400">
+                  Contractor Wallet Address (Recipient)
+                </label>
+                <Link
+                  href="/contractors"
+                  className="text-cyan-400 hover:underline text-[11px] font-semibold"
+                >
+                  Browse Profiles →
+                </Link>
+              </div>
+
+              {/* Quick Profile Selector Dropdown */}
+              <div className="mb-2">
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setContractorAddress(e.target.value);
+                    }
+                  }}
+                  className="w-full rounded-xl bg-slate-950 px-3 py-2 text-xs font-mono text-cyan-300 border border-white/10 focus:outline-none focus:border-cyan-500/50"
+                >
+                  <option value="">⚡ Select from Verified Contractors Directory...</option>
+                  {contractorsList.map((c) => (
+                    <option key={c.walletAddress} value={c.walletAddress}>
+                      {c.fullName} ({c.companyName}) — {c.walletAddress.slice(0, 6)}...{c.walletAddress.slice(-4)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <input
                 type="text"
                 value={contractorAddress}
