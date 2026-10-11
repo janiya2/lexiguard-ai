@@ -34,6 +34,8 @@ export const metadata: Metadata = {
   },
 };
 
+import Providers from "@/components/Providers";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -44,7 +46,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased selection:bg-cyan-500/30 selection:text-cyan-200`}
       >
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

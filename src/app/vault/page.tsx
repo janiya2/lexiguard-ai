@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { computeSHA256 } from "@/lib/web3Service";
 import { getNotarizedContracts } from "@/lib/firestoreService";
+import EscrowVaultSection from "@/components/EscrowVaultSection";
 
 export default function VaultPage() {
   const [contracts, setContracts] = useState<any[]>([]);
@@ -145,6 +146,9 @@ export default function VaultPage() {
             )}
           </div>
         </section>
+
+        {/* SMART LEGAL ESCROW VAULT */}
+        <EscrowVaultSection />
 
         {/* LEDGER TABLE */}
         <section className="space-y-4">

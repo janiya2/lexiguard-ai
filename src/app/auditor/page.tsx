@@ -33,8 +33,10 @@ import {
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/firestoreService";
+import { useWeb3 } from "@/context/Web3Context";
 
 export default function AuditorPage() {
+  const { account, chainId } = useWeb3();
   const [contractTitle, setContractTitle] = useState("Custom Legal Contract");
   const [contractText, setContractText] = useState(SAMPLE_CONTRACTS[0].text);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -120,12 +122,13 @@ export default function AuditorPage() {
     setIsNotarizing(true);
 
     try {
+      const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
       const res = await notarizeDocumentOnChain(
         contractTitle,
         contractText,
         auditReport.overallScore,
-        undefined,
-        "base-sepolia"
+        account || undefined,
+        networkKey
       );
       setNotarizationResult(res);
       setIsCertOpen(true);

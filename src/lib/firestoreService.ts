@@ -138,3 +138,54 @@ export async function getNotarizedContracts(): Promise<any[]> {
     ];
   }
 }
+
+// Save Escrow Deposit to Firestore
+export async function saveEscrowDeposit(escrow: {
+  agreementId: string;
+  client: string;
+  contractor: string;
+  amountEth: string;
+  milestoneDesc: string;
+  txHash: string;
+  network: string;
+  status: "LOCKED" | "RELEASED" | "REFUNDED";
+}): Promise<string | null> {
+  try {
+    const docRef = await addDoc(collection(db, "lexiguard_escrows"), {
+      ...escrow,
+      createdAt: Timestamp.now(),
+    });
+    return docRef.id;
+  } catch (err) {
+    console.warn("Could not save escrow to Firestore:", err);
+    return null;
+  }
+}
+
+// Fetch all Escrow records
+export async function getEscrowAgreements(): Promise<any[]> {
+  try {
+    const q = query(
+      collection(db, "lexiguard_escrows"),
+      orderBy("createdAt", "desc"),
+      limit(20)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    return [
+      {
+        id: "escrow-demo-1",
+        agreementId: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
+        client: "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2",
+        contractor: "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A",
+        amountEth: "0.05",
+        milestoneDesc: "Milestone 1: Web3 Legal Architecture & AI Audit Completion",
+        txHash: "0x4a91b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d",
+        network: "Base Sepolia Testnet",
+        status: "LOCKED",
+        createdAt: { seconds: Math.floor(Date.now() / 1000) - 1800 },
+      },
+    ];
+  }
+}

@@ -39,8 +39,10 @@ import {
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/firestoreService";
+import { useWeb3 } from "@/context/Web3Context";
 
 export default function Home() {
+  const { account, chainId } = useWeb3();
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [selectedSample, setSelectedSample] = useState(SAMPLE_CONTRACTS[0]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -85,12 +87,13 @@ export default function Home() {
     setIsNotarizing(true);
 
     try {
+      const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
       const res = await notarizeDocumentOnChain(
         auditReport.title,
         selectedSample.text,
         auditReport.overallScore,
-        undefined,
-        "base-sepolia"
+        account || undefined,
+        networkKey
       );
 
       setNotarizationResult(res);
