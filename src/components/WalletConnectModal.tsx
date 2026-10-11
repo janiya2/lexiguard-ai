@@ -130,34 +130,68 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
             </div>
           </button>
 
-          {/* Option 2: InnoXpert Gasless Relayer (Demo Sandbox) */}
+          {/* Option 2: Coinbase / Injected Web3 */}
           <button
-            onClick={handleRelayerConnect}
+            onClick={handleMetaMaskConnect}
             disabled={isConnecting}
-            className="w-full p-4 rounded-2xl border border-purple-500/20 bg-purple-950/20 hover:bg-purple-900/30 hover:border-purple-400/50 text-left transition-all flex items-center justify-between group"
+            className="w-full p-4 rounded-2xl border border-white/5 bg-slate-900/60 hover:bg-slate-900/90 hover:border-blue-500/30 text-left transition-all flex items-center justify-between group"
           >
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
-                <Zap className="w-5 h-5 text-purple-400" />
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                <span className="text-base font-bold text-blue-400">🔵</span>
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
-                    InnoXpert Gasless Relayer
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    Recommended Demo
-                  </span>
-                </div>
+                <span className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
+                  Coinbase / Browser Web3
+                </span>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  100% Free instant testing with 1.85 Sepolia ETH sandbox
+                  Universal EIP-1193 Web3 provider
                 </p>
               </div>
             </div>
-            <div className="text-slate-500 group-hover:text-purple-400 transition-colors">
+            <div className="text-slate-500 group-hover:text-blue-400 transition-colors">
               →
             </div>
           </button>
+
+          {/* Option 3: Instant Guest / Demo Sandbox (No Wallet Required) */}
+          <div className="pt-2">
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <div className="h-px bg-white/10 flex-1" />
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                Or Test Without a Wallet
+              </span>
+              <div className="h-px bg-white/10 flex-1" />
+            </div>
+
+            <button
+              onClick={handleRelayerConnect}
+              disabled={isConnecting}
+              className="w-full p-4 rounded-2xl border border-purple-500/20 bg-purple-950/20 hover:bg-purple-900/30 hover:border-purple-400/50 text-left transition-all flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                  <Zap className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
+                      Instant Guest Sandbox
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      1-Click Test
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Preloaded with 1.85 Sepolia ETH for judges & quick tests (No install required)
+                  </p>
+                </div>
+              </div>
+              <div className="text-slate-500 group-hover:text-purple-400 transition-colors">
+                →
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* Informational Footer */}
