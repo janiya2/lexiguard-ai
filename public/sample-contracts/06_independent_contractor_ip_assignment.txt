@@ -1,0 +1,12 @@
+CONFIDENTIALITY AND INVENTIONS ASSIGNMENT AGREEMENT
+
+This Agreement is made by Contractor in favor of Technology Ventures Corp ("Company").
+
+1. BROAD ASSIGNMENT OF ALL INVENTIONS:
+Contractor assigns to Company all right, title, and interest in all works of authorship, inventions, code libraries, designs, and patentable discoveries conceived, reduced to practice, or developed by Contractor during the term of this engagement, whether developed on Company premises or on Contractor's personal equipment during personal hours.
+
+2. PRE-EXISTING TOOLS & FRAMEWORKS:
+Contractor agrees that any pre-existing software, frameworks, or tools utilized in the delivery of services shall automatically be licensed to Company on a perpetual, royalty-free, exclusive, worldwide basis with unrestricted rights to sublicense and modify.
+
+3. MORAL RIGHTS WAIVER:
+Contractor unconditionally and irrevocably waives all moral rights, paternity rights, and integrity rights in any deliverables created under this Agreement across all jurisdictions worldwide.

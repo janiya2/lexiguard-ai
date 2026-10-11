@@ -1,0 +1,18 @@
+MUTUAL NON-DISCLOSURE AND CONFIDENTIALITY AGREEMENT
+
+This Mutual Non-Disclosure Agreement ("Agreement") is made between Party A and Party B (collectively, the "Parties") for the purpose of exploring a mutual technology collaboration.
+
+1. DEFINITION OF CONFIDENTIAL INFORMATION:
+Confidential Information includes all non-public technical, operational, smart contract architecture, cryptographic keys, financial, and business information disclosed by either party, whether orally or in writing.
+
+2. MUTUAL OBLIGATIONS OF NON-DISCLOSURE:
+Each party agrees to safeguard the other party's Confidential Information with the same degree of care as its own proprietary data, but no less than reasonable care. Neither party shall disclose Confidential Information to third parties without prior written consent.
+
+3. STANDARD EXCLUSIONS:
+Confidential Information shall not include information that: (a) is or becomes publicly known through no breach of this Agreement; (b) was already known to receiving party prior to disclosure; (c) is independently developed without reference to disclosing party's data.
+
+4. TERM & SURVIVAL:
+The confidentiality obligations under this Agreement shall survive for a period of two (2) years following the date of disclosure.
+
+5. EQUITABLE REMEDIES:
+The parties acknowledge that unauthorized disclosure may cause irreparable harm for which monetary damages are inadequate, entitling the non-breaching party to seek injunctive relief.

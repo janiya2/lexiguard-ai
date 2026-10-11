@@ -1,0 +1,15 @@
+ON-CHAIN SMART ESCROW SERVICES AGREEMENT (EVM DEPLOYED)
+
+This Agreement is anchored on the Base Sepolia network between Client and Contractor.
+
+1. IMMUTABLE ON-CHAIN DEPOSIT:
+Client shall deposit 100% of the milestone funds into the verified LexiGuard Smart Escrow Vault prior to Contractor commencing work. Funds cannot be unilaterally reclaimed by Client while milestone is in active development.
+
+2. CRYPTOGRAPHIC NOTARIZATION OF DELIVERABLES:
+All specifications and code deliverables shall be verified via SHA-256 cryptographic hash anchored to the EVM blockchain.
+
+3. MILESTONE INSPECTION & RELEASE:
+Client shall have seven (7) calendar days to inspect milestone deliverables. Upon inspection approval, escrowed funds are instantly released to Contractor's wallet address. If Client fails to approve or reject within seven days, funds are automatically released.
+
+4. DECENTRALIZED DISPUTE RESOLUTION:
+In the event of an irreconcilable dispute, either party may trigger the Blockchain Legal Institute (BLI) digital arbitration module. The arbitrator's cryptographic signature shall direct the escrow vault to release funds according to the arbitral decision.

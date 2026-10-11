@@ -1,0 +1,18 @@
+WEB3 STRATEGIC ADVISOR & TOKEN GRANT AGREEMENT
+
+This Web3 Advisor Agreement is entered into between LexiGuard Labs Foundation ("Company") and the Strategic Technical Advisor ("Advisor").
+
+1. ADVISORY SCOPE & COMMITMENT:
+Advisor shall provide strategic guidance on smart contract security architectures, token economics, and EVM decentralized compliance. Total advisory time shall not exceed five (5) hours per calendar month without mutual written agreement.
+
+2. TOKEN ALLOCATION & VESTING SCHEDULE:
+In consideration of Advisory Services, Company grants Advisor 50,000 Governance Tokens. The tokens shall vest over twelve (12) months in equal monthly tranches, following a three (3) month initial cliff from Token Generation Event (TGE).
+
+3. REGULATORY COMPLIANCE WARRANTIES:
+Advisor warrants that Advisor is an accredited participant and will not engage in manipulative market trading. Company warrants that token generation conforms with prevailing decentralized utility guidelines.
+
+4. MUTUAL INDEMNITY & LIABILITY LIMITATION:
+Each party agrees to indemnify the other solely against third-party claims resulting directly from gross negligence or intentional fraud. Aggregate liability shall not exceed the fair market value of vested tokens under this Agreement.
+
+5. TERMINATION:
+Either party may terminate this advisory arrangement with thirty (30) days advance written notice. Vested tokens shall remain Advisor's property.

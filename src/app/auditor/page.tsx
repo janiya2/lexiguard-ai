@@ -38,8 +38,12 @@ import {
   HelpCircle,
   FileCode,
   Scale,
-  Compass
+  Compass,
+  FolderOpen,
+  BookOpen
 } from "lucide-react";
+import SampleContractsModal from "@/components/SampleContractsModal";
+import { TEN_TEST_LEGAL_CONTRACTS, SampleContractDoc } from "@/lib/sampleContractsLibrary";
 import {
   SAMPLE_CONTRACTS,
   analyzeContract,
@@ -64,8 +68,8 @@ import { useWeb3 } from "@/context/Web3Context";
 
 export default function AuditorPage() {
   const { account, chainId, connectionType } = useWeb3();
-  const [contractTitle, setContractTitle] = useState("Custom Legal Contract");
-  const [contractText, setContractText] = useState(SAMPLE_CONTRACTS[0].text);
+  const [contractTitle, setContractTitle] = useState("");
+  const [contractText, setContractText] = useState("");
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditReport, setAuditReport] = useState<LegalAuditReport | null>(null);
   const [filterLevel, setFilterLevel] = useState<string>("ALL");
@@ -78,6 +82,9 @@ export default function AuditorPage() {
   const [invalidDocError, setInvalidDocError] = useState<string | null>(null);
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [credits, setCredits] = useState(3);
+
+  // 10 Test Contracts Modal
+  const [isSampleModalOpen, setIsSampleModalOpen] = useState(false);
 
   // AI Model Engine Modal & Key
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -124,10 +131,6 @@ export default function AuditorPage() {
       } else {
         setCredits(0);
       }
-
-      // Run initial audit on load
-      const report = await analyzeContract("Predatory Freelancer Agreement", contractText, s.geminiApiKey);
-      setAuditReport(report);
     }
     init();
   }, [account]);
@@ -581,23 +584,72 @@ export default function AuditorPage() {
                       />
                     </label>
 
-                    <select
-                      onChange={(e) => {
-                        const selected = SAMPLE_CONTRACTS.find((s) => s.id === e.target.value);
-                        if (selected) {
-                          setContractTitle(selected.title);
-                          setContractText(selected.text);
-                          setUploadedFileMeta(null);
-                          setInvalidDocError(null);
-                        }
-                      }}
-                      className="bg-slate-950 border border-white/10 rounded-xl px-2.5 py-2 text-xs text-slate-300 focus:outline-none focus:border-cyan-400"
-                      defaultValue="predatory-freelance"
+                    <button
+                      type="button"
+                      onClick={() => setIsSampleModalOpen(true)}
+                      className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-all shadow-sm"
+                      title="Open library of 10 real-world test legal contracts"
                     >
-                      <option value="predatory-freelance">Preset: Predatory Contract (High Risk)</option>
-                      <option value="web3-advisory-agreement">Preset: Balanced Token Advisor</option>
-                      <option value="saas-enterprise-sla">Preset: SaaS Enterprise SLA</option>
-                    </select>
+                      <FolderOpen className="w-3.5 h-3.5 text-purple-400" />
+                      <span>📂 10 Test Contracts Suite</span>
+                    </button>
+                  </div>
+
+                  {/* Quick 1-Click Test Chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap text-[10px] pt-1">
+                    <span className="text-slate-500 font-semibold">Quick Test:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const doc = TEN_TEST_LEGAL_CONTRACTS[0];
+                        setContractTitle(doc.title);
+                        setContractText(doc.fullText);
+                        setUploadedFileMeta(null);
+                        setInvalidDocError(null);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-950 border border-rose-500/20 hover:border-rose-500/40 text-rose-300 transition-colors"
+                    >
+                      ⚡ Predatory MSA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const doc = TEN_TEST_LEGAL_CONTRACTS[1];
+                        setContractTitle(doc.title);
+                        setContractText(doc.fullText);
+                        setUploadedFileMeta(null);
+                        setInvalidDocError(null);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-950 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-300 transition-colors"
+                    >
+                      ⚡ Mutual NDA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const doc = TEN_TEST_LEGAL_CONTRACTS[2];
+                        setContractTitle(doc.title);
+                        setContractText(doc.fullText);
+                        setUploadedFileMeta(null);
+                        setInvalidDocError(null);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-950 border border-cyan-500/20 hover:border-cyan-500/40 text-cyan-300 transition-colors"
+                    >
+                      ⚡ Web3 Advisor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const doc = TEN_TEST_LEGAL_CONTRACTS[3];
+                        setContractTitle(doc.title);
+                        setContractText(doc.fullText);
+                        setUploadedFileMeta(null);
+                        setInvalidDocError(null);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-950 border border-amber-500/20 hover:border-amber-500/40 text-amber-300 transition-colors"
+                    >
+                      ⚡ SaaS SLA
+                    </button>
                   </div>
 
                   {/* Formats Badge Bar */}
@@ -980,6 +1032,22 @@ export default function AuditorPage() {
                         </>
                       )}
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuditReport(null);
+                        setContractText("");
+                        setContractTitle("");
+                        setUploadedFileMeta(null);
+                        setInvalidDocError(null);
+                      }}
+                      className="flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-2xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/10 transition-all hover:scale-105 active:scale-95"
+                      title="Clear current audit and start a fresh document"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>New Audit</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1137,11 +1205,162 @@ export default function AuditorPage() {
                 ))}
               </div>
             )}
+
+            {/* If NO audit report yet: Render Comprehensive Introduction & How It Works Guide */}
+            {(!auditReport || !auditReport.isValidLegalDocument) && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* 1. How It Works Hero Card */}
+                <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 border border-white/10 space-y-6 shadow-2xl backdrop-blur-xl">
+                  <div className="space-y-2">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold">
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Blockchain Legal Institute — Automated Compliance Framework</span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                      How LexiGuard AI Legal Risk Auditor Works
+                    </h2>
+                    <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-2xl">
+                      LexiGuard AI safeguards contractors, decentralized builders, and corporate legal teams against predatory contract clauses using autonomous LLM legal heuristics coupled with immutable Base Sepolia on-chain verification.
+                    </p>
+                  </div>
+
+                  {/* 3 Step Process Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-black">
+                        1
+                      </div>
+                      <h3 className="font-bold text-white text-sm">Upload or Paste</h3>
+                      <p className="text-slate-400 leading-relaxed">
+                        Input any Master Services Agreement, NDA, Token Advisory, or SLA as PDF, Word (.DOCX), TXT, or scan images.
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 font-black">
+                        2
+                      </div>
+                      <h3 className="font-bold text-white text-sm">AI Risk Audit</h3>
+                      <p className="text-slate-400 leading-relaxed">
+                        Evaluates 6 core risk categories: Unlimited Liability, Termination without pay, IP surrender, and Net 90 payment holdbacks.
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black">
+                        3
+                      </div>
+                      <h3 className="font-bold text-white text-sm">Export & Notarize</h3>
+                      <p className="text-slate-400 leading-relaxed">
+                        Download amended Word (.DOC) contract with fair AI redlines, or anchor SHA-256 legal hash to Base Sepolia on-chain.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. 10 Production-Grade Legal Test Documents Section */}
+                <div className="p-6 sm:p-8 rounded-3xl bg-slate-900/80 border border-white/10 space-y-5 shadow-2xl backdrop-blur-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                        <FolderOpen className="w-5 h-5 text-cyan-400" />
+                        <span>Ready-to-Test Legal Instruments Suite</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Test live AI clause auditing using 10 pre-drafted legal documents across different risk profiles.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsSampleModalOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-black shadow-md shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95 shrink-0"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      <span>Browse All 10 Test Contracts</span>
+                    </button>
+                  </div>
+
+                  {/* 4 Featured Test Contracts Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    {TEN_TEST_LEGAL_CONTRACTS.slice(0, 4).map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 hover:border-cyan-500/40 transition-all flex flex-col justify-between gap-3 group"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                              {doc.category}
+                            </span>
+                            <span
+                              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                doc.riskProfile.includes("HIGH")
+                                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                                  : doc.riskProfile.includes("MODERATE")
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                  : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              }`}
+                            >
+                              {doc.riskProfile}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-white group-hover:text-cyan-300 transition-colors">
+                            {doc.title}
+                          </h4>
+                          <p className="text-[11px] text-slate-400 line-clamp-2">
+                            {doc.summary}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5">
+                          <a
+                            href={`/sample-contracts/${doc.fileName}`}
+                            download={doc.fileName}
+                            className="flex items-center gap-1 text-[10px] text-cyan-400 hover:underline"
+                            title="Download file to test file uploader"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Download {doc.fileFormat}</span>
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setContractTitle(doc.title);
+                              setContractText(doc.fullText);
+                              setUploadedFileMeta(null);
+                              setInvalidDocError(null);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[11px] font-bold border border-cyan-500/30 transition-all hover:scale-105 active:scale-95"
+                          >
+                            Load into Studio
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
 
       <Footer />
+
+      {/* 10 Production-Grade Legal Test Contracts Modal */}
+      <SampleContractsModal
+        isOpen={isSampleModalOpen}
+        onClose={() => setIsSampleModalOpen(false)}
+        onSelectContract={(doc) => {
+          setContractTitle(doc.title);
+          setContractText(doc.fullText);
+          setUploadedFileMeta(null);
+          setInvalidDocError(null);
+          setAuditReport(null);
+        }}
+      />
 
       {/* AI Engine & API Key Settings Modal */}
       {isAiModalOpen && (

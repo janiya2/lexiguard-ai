@@ -1,0 +1,15 @@
+CUSTOM SOFTWARE DEVELOPMENT AGREEMENT
+
+This Custom Software Agreement is between FinTech Client ("Client") and the Independent Software Developer ("Developer").
+
+1. SCOPE OF DELIVERABLES & SUBJECTIVE QA:
+Developer shall engineer custom backend microservices. Payment is contingent upon Client's subjective internal QA sign-off, which Client may defer for up to sixty (60) days without penalty.
+
+2. PAYMENT TERMS & WARRANTY RETENTION:
+Invoices are payable Net 60 days following formal acceptance. Client shall retain twenty-five percent (25%) of all invoice totals for nine (9) months (270 days) to insure against software bugs or downtime.
+
+3. THIRD-PARTY OPEN SOURCE INDEMNITY:
+Developer expressly warrants and indemnifies Client against any security vulnerability, CVE alert, or intellectual property dispute arising from any open-source dependency or package imported into the software, regardless of whether Developer authored such package.
+
+4. PERPETUAL RESTRICTIVE COVENANT:
+Developer agrees that for a period of two (2) years following project handover, Developer will not develop or consult on any financial software application for any other client globally.

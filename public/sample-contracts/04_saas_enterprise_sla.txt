@@ -1,0 +1,18 @@
+ENTERPRISE SOFTWARE-AS-A-SERVICE (SaaS) AGREEMENT
+
+This SaaS Agreement is made between Cloud Services Provider ("Provider") and the Subscribing Enterprise ("Customer").
+
+1. SERVICE AVAILABILITY & SLA COMMITMENT:
+Provider guarantees 99.5% service uptime per calendar month. In the event of unscheduled downtime exceeding 0.5%, Provider shall issue service credits equal to 5% of monthly fees for each hour of continuous outage, up to a maximum of 50% monthly credit.
+
+2. DATA PRIVACY & TELEMETRY USAGE:
+Customer retains all proprietary ownership of Customer Data stored within Provider's cloud infrastructure. Provider is permitted to analyze aggregated, anonymized usage telemetry solely for infrastructure load balancing and model optimization.
+
+3. LIMITATION OF LIABILITY:
+Neither party shall be held liable for consequential, punitive, or loss of anticipated revenue. Provider's total aggregate liability arising under this Agreement shall be limited to the total fees actually paid by Customer in the preceding twelve (12) months.
+
+4. DATA PORTABILITY & HANDOVER:
+Upon termination, Customer shall have thirty (30) calendar days to export all stored database records in standard JSON/CSV format at no additional cost.
+
+5. GOVERNING LAW:
+This Agreement shall be governed by the laws of the State of California, with disputes submitted to neutral arbitration in San Francisco.
