@@ -40,7 +40,7 @@ export default function Navbar() {
     if (account) {
       syncUserCreditsWithFirestore(account).then(setCredits);
     } else {
-      setCredits(getUserCredits(null));
+      setCredits(0);
     }
   }, [account]);
 
@@ -144,22 +144,22 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Audit Credits Pill & Top-Up Modal Trigger */}
-            <button
-              onClick={() => setIsTopUpModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-300 text-xs font-semibold hover:bg-purple-500/20 transition-all hover:scale-105 active:scale-95 shadow-sm"
-              title="Click to Top Up AI Audit Credits"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>{credits} Audits</span>
-              <span className="text-[10px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-md font-bold">
-                + Top Up
-              </span>
-            </button>
-
             {/* Wallet Connect Status */}
             {account ? (
               <div className="flex items-center gap-2">
+                {/* Audit Credits Pill & Top-Up Modal Trigger */}
+                <button
+                  onClick={() => setIsTopUpModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-300 text-xs font-semibold hover:bg-purple-500/20 transition-all hover:scale-105 active:scale-95 shadow-sm"
+                  title="Click to Top Up AI Audit Credits"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span>{credits} Audits</span>
+                  <span className="text-[10px] bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-md font-bold">
+                    + Top Up
+                  </span>
+                </button>
+
                 {/* Balance Pill */}
                 {balance && (
                   <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs font-mono text-slate-300">

@@ -75,7 +75,7 @@ export default function AuditorPage() {
         const synced = await syncUserCreditsWithFirestore(account);
         setCredits(synced);
       } else {
-        setCredits(getUserCredits(null));
+        setCredits(0);
       }
       // Run initial audit on load
       const report = await analyzeContract("Predatory Freelancer Agreement", contractText, s.geminiApiKey);
@@ -87,16 +87,20 @@ export default function AuditorPage() {
   const handleRunAudit = async () => {
     if (!contractText.trim()) return;
 
-    // Credit paywall check if enabled by Admin
-    if (settings.enableCreditPaywall) {
-      const available = getUserCredits(account);
-      if (available <= 0) {
-        setIsTopUpOpen(true);
-        return;
-      }
-      const updated = deductUserCredit(account);
-      setCredits(updated);
+    // Require wallet connection to track audits and credits on-chain
+    if (!account) {
+      setIsConnectModalOpen(true);
+      return;
     }
+
+    const available = getUserCredits(account);
+    if (available <= 0) {
+      setIsTopUpOpen(true);
+      return;
+    }
+
+    const updated = deductUserCredit(account);
+    setCredits(updated);
 
     setIsAuditing(true);
     setNotarizationResult(null);

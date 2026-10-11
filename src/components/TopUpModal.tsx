@@ -184,11 +184,22 @@ export default function TopUpModal({
 
         {/* Current Balance Bar */}
         <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/5 flex items-center justify-between text-xs">
-          <span className="text-slate-400">Current Available Credits:</span>
-          <span className="font-mono font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
-            <Zap className="w-3.5 h-3.5 text-cyan-400" />
-            {currentCredits} Audits Left
+          <span className="text-slate-400">
+            {account
+              ? `Connected Wallet (${account.slice(0, 6)}...${account.slice(-4)}):`
+              : "Wallet Status:"}
           </span>
+          {account ? (
+            <span className="font-mono font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+              <Zap className="w-3.5 h-3.5 text-cyan-400" />
+              {currentCredits} Audits Left
+            </span>
+          ) : (
+            <span className="font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+              <Wallet className="w-3.5 h-3.5 text-amber-400" />
+              Not Connected
+            </span>
+          )}
         </div>
 
         {/* Error Alert */}

@@ -519,10 +519,10 @@ export async function syncUserCreditsWithFirestore(
   }
 }
 
-// Client-side / local credit management helper with automatic key generation
+// Client-side / local credit management helper strictly bound to verified wallet address
 export function getUserCredits(walletAddress?: string | null, defaultCredits = 3): number {
-  if (typeof window === "undefined") return defaultCredits;
-  const key = walletAddress ? `lexiguard_credits_${walletAddress.toLowerCase()}` : "lexiguard_credits_guest";
+  if (typeof window === "undefined" || !walletAddress) return 0;
+  const key = `lexiguard_credits_${walletAddress.toLowerCase()}`;
   const stored = localStorage.getItem(key);
   if (stored !== null) {
     return parseInt(stored, 10);
@@ -532,47 +532,43 @@ export function getUserCredits(walletAddress?: string | null, defaultCredits = 3
 }
 
 export function deductUserCredit(walletAddress?: string | null): number {
-  if (typeof window === "undefined") return 0;
-  const key = walletAddress ? `lexiguard_credits_${walletAddress.toLowerCase()}` : "lexiguard_credits_guest";
+  if (typeof window === "undefined" || !walletAddress) return 0;
+  const key = `lexiguard_credits_${walletAddress.toLowerCase()}`;
   const current = getUserCredits(walletAddress);
   const updated = Math.max(0, current - 1);
   localStorage.setItem(key, updated.toString());
 
   // Background sync to Firestore wallet record
-  if (walletAddress) {
-    const cleanAddr = walletAddress.toLowerCase();
-    setDoc(
-      doc(db, "lexiguard_wallets", cleanAddr),
-      {
-        credits: updated,
-        lastAuditAt: Timestamp.now(),
-      },
-      { merge: true }
-    ).catch(() => {});
-  }
+  const cleanAddr = walletAddress.toLowerCase();
+  setDoc(
+    doc(db, "lexiguard_wallets", cleanAddr),
+    {
+      credits: updated,
+      lastAuditAt: Timestamp.now(),
+    },
+    { merge: true }
+  ).catch(() => {});
 
   return updated;
 }
 
 export function addUserCredits(walletAddress: string | null | undefined, added: number): number {
-  if (typeof window === "undefined") return added;
-  const key = walletAddress ? `lexiguard_credits_${walletAddress.toLowerCase()}` : "lexiguard_credits_guest";
+  if (typeof window === "undefined" || !walletAddress) return 0;
+  const key = `lexiguard_credits_${walletAddress.toLowerCase()}`;
   const current = getUserCredits(walletAddress);
   const updated = current + added;
   localStorage.setItem(key, updated.toString());
 
   // Background sync to Firestore wallet record
-  if (walletAddress) {
-    const cleanAddr = walletAddress.toLowerCase();
-    setDoc(
-      doc(db, "lexiguard_wallets", cleanAddr),
-      {
-        credits: updated,
-        lastTopUpAt: Timestamp.now(),
-      },
-      { merge: true }
-    ).catch(() => {});
-  }
+  const cleanAddr = walletAddress.toLowerCase();
+  setDoc(
+    doc(db, "lexiguard_wallets", cleanAddr),
+    {
+      credits: updated,
+      lastTopUpAt: Timestamp.now(),
+    },
+    { merge: true }
+  ).catch(() => {});
 
   return updated;
 }
