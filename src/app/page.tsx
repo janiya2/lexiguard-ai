@@ -3,8 +3,14 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import CertificateModal from "@/components/CertificateModal";
+import CyberSecurityFooterSection from "@/components/CyberSecurityFooterSection";
+import CyberHeroBackgroundAnimation from "@/components/CyberHeroBackgroundAnimation";
+import LegacyVsLexiGuardSection from "@/components/LegacyVsLexiGuardSection";
+import ProtocolPipelineSection from "@/components/ProtocolPipelineSection";
+import InteractiveAuditorSandbox from "@/components/InteractiveAuditorSandbox";
+import MultiChainSecurityVaultSection from "@/components/MultiChainSecurityVaultSection";
+import EnterprisePricingSection from "@/components/EnterprisePricingSection";
+import LegalComplianceFaqSection from "@/components/LegalComplianceFaqSection";
 import {
   Shield,
   ShieldAlert,
@@ -22,37 +28,24 @@ import {
   Copy,
   Check,
   RefreshCw,
+  Zap,
+  UserCheck,
 } from "lucide-react";
 import {
-  SAMPLE_CONTRACTS,
-  analyzeContract,
-  LegalAuditReport,
-} from "@/lib/aiLegalAuditor";
-import {
-  notarizeDocumentOnChain,
-  NotarizationResult,
-} from "@/lib/web3Service";
-import {
   getSiteSettings,
-  saveNotarizedContract,
   getNotarizedContracts,
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
+  DEFAULT_HERO_CONFIG,
 } from "@/lib/firestoreService";
 import { useWeb3 } from "@/context/Web3Context";
 
 export default function Home() {
   const { account, chainId } = useWeb3();
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
-  const [selectedSample, setSelectedSample] = useState(SAMPLE_CONTRACTS[0]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isNotarizing, setIsNotarizing] = useState(false);
-  const [auditReport, setAuditReport] = useState<LegalAuditReport | null>(null);
-  const [notarizationResult, setNotarizationResult] = useState<NotarizationResult | null>(null);
-  const [isCertModalOpen, setIsCertModalOpen] = useState(false);
   const [recentContracts, setRecentContracts] = useState<any[]>([]);
 
-  // Load Firestore settings & initial audit
+  // Load Firestore settings & initial notarized contracts
   useEffect(() => {
     async function loadData() {
       const s = await getSiteSettings();
@@ -60,473 +53,255 @@ export default function Home() {
 
       const contracts = await getNotarizedContracts();
       setRecentContracts(contracts);
-
-      // Perform default analysis on first sample
-      const initialReport = await analyzeContract(
-        SAMPLE_CONTRACTS[0].title,
-        SAMPLE_CONTRACTS[0].text,
-        s.geminiApiKey
-      );
-      setAuditReport(initialReport);
     }
     loadData();
   }, []);
 
-  const handleSelectSample = async (sample: (typeof SAMPLE_CONTRACTS)[0]) => {
-    setSelectedSample(sample);
-    setIsAnalyzing(true);
-    setNotarizationResult(null);
-
-    const report = await analyzeContract(sample.title, sample.text, settings.geminiApiKey);
-    setAuditReport(report);
-    setIsAnalyzing(false);
-  };
-
-  const handleNotarize = async () => {
-    if (!auditReport) return;
-    setIsNotarizing(true);
-
-    try {
-      const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
-      const res = await notarizeDocumentOnChain(
-        auditReport.title,
-        selectedSample.text,
-        auditReport.overallScore,
-        account || undefined,
-        networkKey
-      );
-
-      setNotarizationResult(res);
-      setIsCertModalOpen(true);
-
-      // Save to Firestore lexiguard_contracts collection
-      await saveNotarizedContract(auditReport, res);
-
-      // Refresh recent contracts
-      const updated = await getNotarizedContracts();
-      setRecentContracts(updated);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsNotarizing(false);
-    }
-  };
-
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen w-full max-w-full overflow-x-hidden">
       <Navbar />
 
       {/* Announcement Banner */}
-      <div className="w-full bg-gradient-to-r from-cyan-950/70 via-purple-950/70 to-slate-900 border-b border-cyan-500/20 py-2.5 px-4 text-center">
-        <p className="text-xs font-semibold text-cyan-200 tracking-wide flex items-center justify-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-spin" style={{ animationDuration: "6s" }} />
-          <span>{settings.announcementText}</span>
+      <div className="w-full bg-gradient-to-r from-cyan-950/70 via-purple-950/70 to-slate-900 border-b border-cyan-500/20 py-2 sm:py-2.5 px-3 sm:px-4 text-center overflow-hidden">
+        <p className="text-[11px] sm:text-xs font-semibold text-cyan-200 tracking-wide flex items-center justify-center gap-1.5 sm:gap-2 max-w-full">
+          <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0 animate-spin" style={{ animationDuration: "6s" }} />
+          <span className="truncate sm:whitespace-normal">{settings.announcementText}</span>
         </p>
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 space-y-24">
-        
-        {/* HERO SECTION */}
-        <section className="text-center space-y-6 pt-4 max-w-4xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-inner">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            <span>AI Legal Clause Auditor + EVM Notary dApp</span>
-          </div>
+      {/* SECTION 1: CYBER-LEGAL HERO SECTION (THE HOOK) */}
+      <section className="relative w-full overflow-hidden border-b border-white/10 bg-[#040711] py-8 sm:py-12 lg:py-20">
+        {/* Dynamic Background Image with Cyber Mask */}
+        {(settings.heroConfig?.bgImageUrl || DEFAULT_HERO_CONFIG.bgImageUrl) && (
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none opacity-25 mix-blend-luminosity md:opacity-35 transition-all duration-1000 scale-105"
+            style={{
+              backgroundImage: `url(${settings.heroConfig?.bgImageUrl || DEFAULT_HERO_CONFIG.bgImageUrl})`,
+            }}
+          />
+        )}
 
-          <h1 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-[1.15]">
-            Audit, Redline & Notarize{" "}
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400">
-              Legal Contracts
-            </span>{" "}
-            on the Blockchain
-          </h1>
+        {/* Ambient Gradient Overlays */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#040711]/95 via-[#040711]/70 to-[#040711] pointer-events-none" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[750px] h-[350px] bg-gradient-to-tr from-cyan-500/15 via-purple-600/15 to-blue-500/10 blur-[130px] rounded-full pointer-events-none" />
 
-          <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-            {settings.heroSubtitle}
-          </p>
+        {/* Live Cyber-Legal Blockchain Nodes Canvas Animation */}
+        {(settings.heroConfig?.enableBackgroundAnimation ?? DEFAULT_HERO_CONFIG.enableBackgroundAnimation) && (
+          <CyberHeroBackgroundAnimation
+            styleType={settings.heroConfig?.animationStyle || DEFAULT_HERO_CONFIG.animationStyle}
+          />
+        )}
 
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
-            <Link
-              href="/auditor"
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-[0_0_30px_-5px_rgba(6,182,212,0.5)] transition-all hover:scale-[1.02]"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Launch Custom Contract Auditor</span>
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Link>
-
-            <Link
-              href="/vault"
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-white/10 transition-all hover:scale-[1.02]"
-            >
-              <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span>Explore Public Notary Vault</span>
-            </Link>
-          </div>
-
-          {/* Micro Stats Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-8 text-left">
-            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5 backdrop-blur-sm">
-              <p className="text-[11px] font-medium text-slate-400">Blockchain Networks</p>
-              <p className="text-lg font-extrabold text-white">Base & Arbitrum</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5 backdrop-blur-sm">
-              <p className="text-[11px] font-medium text-slate-400">Hashing Integrity</p>
-              <p className="text-lg font-extrabold text-cyan-400">SHA-256 + keccak256</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5 backdrop-blur-sm">
-              <p className="text-[11px] font-medium text-slate-400">Average Audit Latency</p>
-              <p className="text-lg font-extrabold text-emerald-400">&lt; 1.8 Seconds</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5 backdrop-blur-sm">
-              <p className="text-[11px] font-medium text-slate-400">Legal Review Saved</p>
-              <p className="text-lg font-extrabold text-purple-400">85% Billable Hours</p>
-            </div>
-          </div>
-        </section>
-
-        {/* INTERACTIVE LIVE AUDITOR SANDBOX (KEY JUDGING DEMO) */}
-        <section className="rounded-3xl bg-slate-900/80 border border-white/10 p-6 sm:p-8 backdrop-blur-xl shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
-          {/* Sandbox Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-white/10">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  Live Interactive Demo
-                </span>
-                <span className="text-xs text-slate-400">1-Click Test for Judges</span>
-              </div>
-              <h2 className="text-2xl font-black text-white mt-1">
-                Contract Risk Matrix & On-Chain Simulator
-              </h2>
-            </div>
-
-            {/* Contract Presets */}
-            <div className="flex flex-wrap items-center gap-2">
-              {SAMPLE_CONTRACTS.map((sample) => (
-                <button
-                  key={sample.id}
-                  onClick={() => handleSelectSample(sample)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                    selectedSample.id === sample.id
-                      ? "bg-cyan-500 text-black shadow-md shadow-cyan-500/20"
-                      : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                  }`}
-                >
-                  {sample.category}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Sandbox Body: 2 Columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-6">
+        <div className="relative max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 space-y-8 sm:space-y-12 min-w-0">
+          {/* Main 2-Column Hero Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center min-w-0">
             
-            {/* Left Column: Contract Document View */}
-            <div className="lg:col-span-5 space-y-4">
-              <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-                <span className="flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Document Text ({selectedSample.title})</span>
+            {/* Left Column: Value Proposition & CTAs */}
+            <div className="lg:col-span-7 space-y-5 sm:space-y-6 text-left min-w-0 w-full">
+              {/* Live Protocol Badge */}
+              <div className="inline-flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-full bg-slate-900/90 border border-cyan-500/30 text-cyan-300 text-[11px] sm:text-xs font-semibold shadow-inner shadow-cyan-500/10 backdrop-blur-md max-w-full">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
                 </span>
-                <span className="text-[11px] text-slate-500">Read-Only Sample</span>
+                <span className="break-words line-clamp-2 sm:line-clamp-none">
+                  {settings.heroConfig?.badgeText || DEFAULT_HERO_CONFIG.badgeText}
+                </span>
               </div>
 
-              <div className="h-96 rounded-2xl bg-slate-950/80 border border-white/5 p-4 font-mono text-xs text-slate-300 overflow-y-auto leading-relaxed select-text">
-                {selectedSample.text}
-              </div>
+              {/* Main Headline */}
+              <h1 className="text-2xl sm:text-4xl lg:text-6xl font-black text-white tracking-tight leading-[1.15] break-words">
+                {settings.heroConfig?.headlinePrefix || DEFAULT_HERO_CONFIG.headlinePrefix}{" "}
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-teal-300 to-purple-400">
+                  {settings.heroConfig?.headlineHighlight || DEFAULT_HERO_CONFIG.headlineHighlight}
+                </span>{" "}
+                <span className="text-slate-300">
+                  {settings.heroConfig?.headlineSuffix || DEFAULT_HERO_CONFIG.headlineSuffix}
+                </span>
+              </h1>
 
-              <div className="flex items-center justify-between text-xs pt-1">
-                <span className="text-slate-400">Want to test your own custom file?</span>
+              {/* Subheadline Copy */}
+              <p className="text-slate-300 text-xs sm:text-base lg:text-lg max-w-2xl leading-relaxed break-words">
+                {settings.heroConfig?.subheadline || settings.heroSubtitle || DEFAULT_HERO_CONFIG.subheadline}
+              </p>
+
+              {/* Interactive CTA Cluster */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 w-full sm:w-auto">
                 <Link
-                  href="/auditor"
-                  className="text-cyan-400 hover:text-cyan-300 font-semibold inline-flex items-center gap-1"
+                  href={settings.heroConfig?.primaryCtaLink || DEFAULT_HERO_CONFIG.primaryCtaLink}
+                  className="flex items-center justify-center gap-2.5 px-5 sm:px-6 py-3.5 rounded-2xl text-xs sm:text-sm font-bold bg-gradient-to-r from-cyan-500 via-blue-600 to-purple-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-[0_0_30px_-5px_rgba(6,182,212,0.5)] transition-all hover:scale-[1.02] active:scale-[0.98] text-center"
                 >
-                  Open Custom Uploader <ArrowRight className="w-3 h-3" />
+                  <Sparkles className="w-4 h-4 text-cyan-200 shrink-0" />
+                  <span>{settings.heroConfig?.primaryCtaText || DEFAULT_HERO_CONFIG.primaryCtaText}</span>
+                  <ArrowRight className="w-4 h-4 ml-0.5 shrink-0" />
+                </Link>
+
+                <Link
+                  href={settings.heroConfig?.secondaryCtaLink || DEFAULT_HERO_CONFIG.secondaryCtaLink}
+                  className="flex items-center justify-center gap-2 px-4 sm:px-5 py-3.5 rounded-2xl text-xs sm:text-sm font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-white/10 hover:border-cyan-500/30 transition-all hover:scale-[1.02] text-center"
+                >
+                  <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span>{settings.heroConfig?.secondaryCtaText || DEFAULT_HERO_CONFIG.secondaryCtaText}</span>
+                </Link>
+
+                <Link
+                  href={settings.heroConfig?.tertiaryCtaLink || DEFAULT_HERO_CONFIG.tertiaryCtaLink}
+                  className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-all hover:scale-[1.02] text-center"
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span>{settings.heroConfig?.tertiaryCtaText || DEFAULT_HERO_CONFIG.tertiaryCtaText}</span>
                 </Link>
               </div>
+
+              {/* Trust & Compliance Signals */}
+              <div className="pt-2 flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 sm:gap-4 text-[11px] sm:text-xs text-slate-400 font-medium">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Base Sepolia #84532 Smart Contract</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span>SHA-256 + keccak256 Proof</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span>Delaware & BLI Standards</span>
+                </span>
+              </div>
             </div>
 
-            {/* Right Column: AI Risk Engine & Notarization */}
-            <div className="lg:col-span-7 space-y-5">
-              {isAnalyzing ? (
-                <div className="h-96 flex flex-col items-center justify-center gap-3 text-slate-400">
-                  <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
-                  <p className="text-xs font-semibold">Analyzing contract clauses & risk liabilities...</p>
-                </div>
-              ) : auditReport ? (
-                <>
-                  {/* Top Score Strip */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] text-slate-400">Legal Health Score</p>
-                        <p
-                          className={`text-2xl font-black ${
-                            auditReport.overallScore < 50
-                              ? "text-rose-400"
-                              : auditReport.overallScore < 85
-                              ? "text-amber-400"
-                              : "text-emerald-400"
-                          }`}
-                        >
-                          {auditReport.overallScore} / 100
-                        </p>
-                      </div>
-                      <div
-                        className={`w-11 h-11 rounded-xl flex items-center justify-center ${
-                          auditReport.overallScore < 50
-                            ? "bg-rose-500/10 text-rose-400"
-                            : auditReport.overallScore < 85
-                            ? "bg-amber-500/10 text-amber-400"
-                            : "bg-emerald-500/10 text-emerald-400"
-                        }`}
-                      >
-                        {auditReport.overallScore < 50 ? (
-                          <ShieldAlert className="w-6 h-6" />
-                        ) : (
-                          <ShieldCheck className="w-6 h-6" />
-                        )}
-                      </div>
-                    </div>
+            {/* Right Column: Holographic Cyber Shield Visual Card */}
+            {(settings.heroConfig?.showFloatingShield ?? DEFAULT_HERO_CONFIG.showFloatingShield) && (
+              <div className="lg:col-span-5 relative group min-w-0 w-full mt-4 lg:mt-0">
+                {/* Outer Glow */}
+                <div className="absolute -inset-1 rounded-3xl bg-gradient-to-tr from-cyan-500/20 via-purple-500/20 to-blue-500/20 blur-xl opacity-75 group-hover:opacity-100 transition-opacity" />
 
-                    <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] text-slate-400">Critical Liabilities</p>
-                        <p className="text-2xl font-black text-rose-400">
-                          {auditReport.criticalRisksCount}
-                        </p>
-                      </div>
-                      <div className="w-11 h-11 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                        <AlertTriangle className="w-6 h-6" />
-                      </div>
+                <div className="relative rounded-3xl bg-slate-900/80 border border-white/10 p-4 sm:p-6 backdrop-blur-2xl shadow-2xl space-y-4 min-w-0">
+                  {/* Card Header */}
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      <span className="font-bold text-white tracking-wide truncate">LEXIGUARD VERIFIER v2.5</span>
                     </div>
-
-                    <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] text-slate-400">Clauses Audited</p>
-                        <p className="text-2xl font-black text-cyan-400">
-                          {auditReport.totalClausesAnalyzed}
-                        </p>
-                      </div>
-                      <div className="w-11 h-11 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
-                        <FileCheck2 className="w-6 h-6" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Summary Box */}
-                  <div className="p-3.5 rounded-2xl bg-cyan-950/30 border border-cyan-500/20 text-xs text-cyan-200">
-                    <span className="font-bold uppercase tracking-wider text-[10px] text-cyan-400 block mb-1">
-                      AI Executive Assessment
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 shrink-0">
+                      Base #84532
                     </span>
-                    {auditReport.riskSummary}
                   </div>
 
-                  {/* Clause Highlights (Scrollable) */}
-                  <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                    {auditReport.clauses.map((clause) => (
-                      <div
-                        key={clause.id}
-                        className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/5 space-y-2 text-xs"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-bold text-white text-[13px]">{clause.title}</span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                              clause.riskLevel === "CRITICAL"
-                                ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                                : clause.riskLevel === "WARNING"
-                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                            }`}
-                          >
-                            {clause.riskLevel}
-                          </span>
-                        </div>
+                  {/* Central Graphic */}
+                  <div className="relative aspect-square sm:aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 flex items-center justify-center">
+                    <img
+                      src={settings.heroConfig?.sideImageUrl || DEFAULT_HERO_CONFIG.sideImageUrl}
+                      alt="LexiGuard Cyber Hologram Notary"
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#040711] via-transparent to-transparent opacity-50" />
 
-                        <p className="text-slate-400 text-[11px]">{clause.riskExplanation}</p>
-
-                        <div className="p-2.5 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-[11px] text-emerald-300">
-                          <span className="font-bold text-emerald-400 block text-[10px] uppercase">
-                            AI Redline Recommendation:
-                          </span>
-                          {clause.recommendedRedline}
-                        </div>
+                    {/* Floating Chip 1: Cryptographic Digest */}
+                    <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-950/85 border border-cyan-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
+                      <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
+                      <div>
+                        <p className="text-[8px] sm:text-[9px] uppercase tracking-wider text-slate-400 font-bold">SHA-256 Digest</p>
+                        <p className="text-[9px] sm:text-[10px] font-mono font-bold text-cyan-300">0x8fa9...b302</p>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Action: Notarize On-Chain */}
-                  <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <div>
-                      <p className="text-xs font-bold text-white">Cryptographic Proof of Existence</p>
-                      <p className="text-[11px] text-slate-400">
-                        Anchor SHA-256 hash to Base Sepolia testnet with immutable timestamp.
-                      </p>
                     </div>
 
-                    <button
-                      onClick={handleNotarize}
-                      disabled={isNotarizing}
-                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-black shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      {isNotarizing ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Notarizing On-Chain...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Notarize to Blockchain</span>
-                        </>
-                      )}
-                    </button>
+                    {/* Floating Chip 2: Health Rating */}
+                    <div className="absolute bottom-2.5 right-2.5 sm:bottom-3 sm:right-3 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-950/85 border border-emerald-500/30 backdrop-blur-md shadow-lg flex items-center gap-1.5 sm:gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+                      <div>
+                        <p className="text-[8px] sm:text-[9px] uppercase tracking-wider text-slate-400 font-bold">Legal Health</p>
+                        <p className="text-[10px] sm:text-[11px] font-mono font-black text-emerald-300">98/100 Pass</p>
+                      </div>
+                    </div>
                   </div>
-                </>
-              ) : null}
-            </div>
-          </div>
-        </section>
 
-        {/* 4 CORE VALUE PILLARS */}
-        <section className="space-y-8">
-          <div className="text-center max-w-2xl mx-auto space-y-2">
-            <h2 className="text-3xl font-black text-white">
-              The Convergence of Legal Intelligence & Web3
-            </h2>
-            <p className="text-slate-400 text-xs sm:text-sm">
-              Engineered specifically for the Blockchain Legal Institute (BLI) standards of compliance, privacy, and cryptographic admissibility.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-white/5 space-y-3.5 hover:border-cyan-500/30 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
-                <Cpu className="w-6 h-6" />
+                  {/* Card Bottom Strip */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-slate-400 pt-1">
+                    <span className="flex items-center gap-1.5 font-mono">
+                      <Lock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span>keccak256 Proof-of-Existence</span>
+                    </span>
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 shrink-0" /> Zero Liabilities
+                    </span>
+                  </div>
+                </div>
               </div>
-              <h3 className="font-bold text-white text-base">Clause-by-Clause AI Engine</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Gemini & Heuristic models dissect every single provision, isolating asymmetric liability caps, unfair holdbacks, and overbroad IP transfers.
+            )}
+
+          </div>
+
+          {/* 4 Micro Stats Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 text-left pt-2 min-w-0 w-full">
+            <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-cyan-500/30 transition-all backdrop-blur-sm space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate">
+                {settings.heroConfig?.stat1Label || DEFAULT_HERO_CONFIG.stat1Label}
+              </p>
+              <p className="text-sm sm:text-lg font-extrabold text-white truncate">
+                {settings.heroConfig?.stat1Value || DEFAULT_HERO_CONFIG.stat1Value}
               </p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-white/5 space-y-3.5 hover:border-cyan-500/30 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                <Lock className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-white text-base">Cryptographic Proof of Existence</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Generate SHA-256 document digests. If even a single punctuation mark is secretly altered by another party, the cryptographic verification fails instantly.
+            <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-cyan-500/30 transition-all backdrop-blur-sm space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate">
+                {settings.heroConfig?.stat2Label || DEFAULT_HERO_CONFIG.stat2Label}
+              </p>
+              <p className="text-sm sm:text-lg font-extrabold text-cyan-400 font-mono truncate">
+                {settings.heroConfig?.stat2Value || DEFAULT_HERO_CONFIG.stat2Value}
               </p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-white/5 space-y-3.5 hover:border-cyan-500/30 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                <Layers className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-white text-base">EVM Smart Contract Registry</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Deployed Solidity contract records the immutable timestamp, notary address, and verification state directly to Base Sepolia and Arbitrum.
+            <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-emerald-500/30 transition-all backdrop-blur-sm space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate">
+                {settings.heroConfig?.stat3Label || DEFAULT_HERO_CONFIG.stat3Label}
+              </p>
+              <p className="text-sm sm:text-lg font-extrabold text-emerald-400 truncate">
+                {settings.heroConfig?.stat3Value || DEFAULT_HERO_CONFIG.stat3Value}
               </p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-900/60 border border-white/5 space-y-3.5 hover:border-cyan-500/30 transition-all group">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <h3 className="font-bold text-white text-base">Verifiable Digital Certificate</h3>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Every notarized agreement generates an executive cryptographic certificate with transaction hashes, block height, and block explorer verification.
+            <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-purple-500/30 transition-all backdrop-blur-sm space-y-1 min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-medium text-slate-400 truncate">
+                {settings.heroConfig?.stat4Label || DEFAULT_HERO_CONFIG.stat4Label}
+              </p>
+              <p className="text-sm sm:text-lg font-extrabold text-purple-400 truncate">
+                {settings.heroConfig?.stat4Value || DEFAULT_HERO_CONFIG.stat4Value}
               </p>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* RECENT NOTARIZED LEDGER STREAM */}
-        <section className="rounded-3xl bg-slate-900/40 border border-white/5 p-6 sm:p-8 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-white">Live On-Chain Notary Ledger</h3>
-              <p className="text-xs text-slate-400">
-                Real-time cryptographic proofs anchored to EVM networks via LexiGuard Smart Contract.
-              </p>
-            </div>
-            <Link
-              href="/vault"
-              className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1"
-            >
-              View Full Vault Ledger <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+      {/* SECTION 2: THE BROKEN LEGACY SYSTEM VS. LEXIGUARD AI PROTOCOL */}
+      <LegacyVsLexiGuardSection config={settings.section2Config} />
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="text-[11px] uppercase tracking-wider text-slate-400 border-b border-white/5 bg-slate-950/40">
-                <tr>
-                  <th className="py-3 px-4">Document Title</th>
-                  <th className="py-3 px-4">Score</th>
-                  <th className="py-3 px-4">Document SHA-256</th>
-                  <th className="py-3 px-4">Network</th>
-                  <th className="py-3 px-4 text-right">Verification</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {recentContracts.slice(0, 5).map((doc) => (
-                  <tr key={doc.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3.5 px-4 font-semibold text-white max-w-xs truncate">
-                      {doc.title}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded font-extrabold text-[11px] ${
-                          doc.overallScore < 50
-                            ? "bg-rose-500/20 text-rose-300"
-                            : doc.overallScore < 85
-                            ? "bg-amber-500/20 text-amber-300"
-                            : "bg-emerald-500/20 text-emerald-300"
-                        }`}
-                      >
-                        {doc.overallScore}%
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-[11px] text-cyan-400 truncate max-w-[140px]">
-                      {doc.docHash || "0x8fa92300bcf4..."}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-400">{doc.network}</td>
-                    <td className="py-3.5 px-4 text-right">
-                      <a
-                        href={doc.explorerUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/20 font-medium transition-all"
-                      >
-                        <span>Explorer</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      {/* SECTION 3: THE 3-STEP CRYPTOGRAPHIC VERIFICATION PIPELINE */}
+      <ProtocolPipelineSection config={settings.section3Config} />
 
-      </main>
-
-      <Footer />
-
-      {/* Certificate Modal */}
-      <CertificateModal
-        isOpen={isCertModalOpen}
-        onClose={() => setIsCertModalOpen(false)}
-        title={auditReport?.title || selectedSample.title}
-        score={auditReport?.overallScore || 80}
-        notary={notarizationResult}
+      {/* SECTION 4: INTERACTIVE LIVE AUDITOR SANDBOX & ON-CHAIN SIMULATOR */}
+      <InteractiveAuditorSandbox
+        config={settings.section4Config}
+        geminiApiKey={settings.geminiApiKey}
+        account={account}
+        chainId={chainId}
+        onNotarizationCompleted={async () => {
+          const updated = await getNotarizedContracts();
+          setRecentContracts(updated);
+        }}
       />
+
+      {/* SECTION 5: MULTI-CHAIN SECURITY & LIVE CRYPTOGRAPHIC PROOF VAULT */}
+      <MultiChainSecurityVaultSection config={settings.section5Config} />
+
+      {/* SECTION 6: ENTERPRISE TIER PRICING & INSTITUTIONAL SLA VAULT */}
+      <EnterprisePricingSection config={settings.section6Config} />
+
+      {/* SECTION 7: INTERACTIVE LEGAL & COMPLIANCE FAQ KNOWLEDGE VAULT */}
+      <LegalComplianceFaqSection config={settings.section7Config} />
+
+      {/* SECTION 8: CYBER SECURITY LEGAL FOOTER & VERIFICATION EXPLORER */}
+      <CyberSecurityFooterSection config={settings.section8Config} />
     </div>
   );
 }

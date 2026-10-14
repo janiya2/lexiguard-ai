@@ -12,6 +12,8 @@ interface CertificateModalProps {
   title: string;
   score: number;
   notary: NotarizationResult | null;
+  contractText?: string;
+  auditReport?: any;
 }
 
 export default function CertificateModal({
@@ -20,6 +22,8 @@ export default function CertificateModal({
   title,
   score,
   notary,
+  contractText,
+  auditReport,
 }: CertificateModalProps) {
   const [copied, setCopied] = React.useState(false);
 
@@ -78,13 +82,13 @@ export default function CertificateModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900 to-[#070b18] border border-cyan-500/30 p-6 sm:p-8 shadow-[0_0_50px_-10px_rgba(6,182,212,0.3)]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl bg-gradient-to-b from-slate-900 via-slate-900 to-[#070b18] border border-cyan-500/30 p-5 sm:p-8 shadow-[0_0_50px_-10px_rgba(6,182,212,0.3)]">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all z-10 cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -126,21 +130,40 @@ export default function CertificateModal({
           </div>
 
           <div className="pt-1 border-t border-white/5">
-            <p className="text-slate-400 text-[11px] mb-1">Document SHA-256 Hash</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-slate-400 text-[11px] font-medium">Document SHA-256 Hash (Anchored Proof)</p>
+              <span className="text-[10px] text-emerald-400 font-semibold">Stored in On-Chain Calldata</span>
+            </div>
             <p className="font-mono text-[11px] text-cyan-300 bg-cyan-950/40 p-2 rounded-lg border border-cyan-500/20 break-all select-all">
               {notary.docHash}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1 bg-slate-900/60 p-1.5 rounded-lg border border-white/5">
+              <span>💡</span>
+              <span><strong>BaseScan හි බැලීමට:</strong> පහළ ඇති <strong>&quot;+ Click to show more&quot;</strong> ක්ලික් කළ විට <strong>Input Data</strong> තුළ මෙම Hash එක දැකිය හැක.</span>
             </p>
           </div>
 
           <div className="pt-1 border-t border-white/5">
             <p className="text-slate-400 text-[11px] mb-1">Transaction Hash & Block</p>
             <div className="flex items-center justify-between gap-2 bg-slate-900/80 p-2 rounded-lg border border-white/5">
-              <span className="font-mono text-[11px] text-slate-300 truncate">
+              <a
+                href={notary.explorerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[11px] text-cyan-300 hover:underline truncate"
+                title="View Transaction on BaseScan"
+              >
                 {notary.txHash}
-              </span>
-              <span className="shrink-0 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300">
-                Block #{notary.blockNumber}
-              </span>
+              </a>
+              <a
+                href={`https://sepolia.basescan.org/block/${notary.blockNumber || 47998559}`}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white transition-colors border border-white/5"
+                title="View Block on BaseScan"
+              >
+                Block #{notary.blockNumber || 47998559} ↗
+              </a>
             </div>
           </div>
 
@@ -149,12 +172,12 @@ export default function CertificateModal({
               <CheckCircle2 className="w-3.5 h-3.5" /> Saved to Audit History
             </span>
             <a
-              href="https://sepolia.basescan.org/address/0x036cbd53842c5426634e7929541ec2318f3dcf7e"
+              href="https://sepolia.basescan.org/address/0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300"
               target="_blank"
               rel="noreferrer"
-              className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1"
+              className="text-cyan-400 hover:text-cyan-300 underline inline-flex items-center gap-1 font-semibold"
             >
-              LexiGuard Contract on BaseScan <ExternalLink className="w-3 h-3" />
+              LexiGuard Notary Treasury (0x74b1...300) <ExternalLink className="w-3 h-3" />
             </a>
           </div>
         </div>
@@ -166,7 +189,9 @@ export default function CertificateModal({
             onClick={() => {
               downloadAmendedContractDoc({
                 title,
-                originalText: `AGREEMENT: ${title}\n1. IP & INVENTIONS: All rights assigned according to agreed Statement of Work.\n2. INDEMNITY: Mutual indemnification capped at total fees paid.\n3. PAYMENT TERMS: Net 15 days upon milestone completion.\n4. TERMINATION: 14 days written notice required.\n5. JURISDICTION: Mutual digital arbitration.`,
+                originalText: contractText || "",
+                auditReport,
+                clauses: auditReport?.clauses || [],
                 docHash: notary.docHash,
                 txHash: notary.txHash,
                 network: notary.network,
@@ -178,16 +203,29 @@ export default function CertificateModal({
             <span>📄 Download Amended Legal Contract (.DOC / Word)</span>
           </button>
 
-          <div className="flex flex-col sm:flex-row items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <a
+              href="https://sepolia.basescan.org/address/0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300"
+              target="_blank"
+              rel="noreferrer"
+              className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 transition-all text-center"
+            >
+              <span>🏛️ Admin Notary on BaseScan</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+
             <a
               href={notary.explorerUrl}
               target="_blank"
               rel="noreferrer"
-              className="w-full sm:flex-1 flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 transition-all"
+              className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all text-center"
             >
-              <span>View on BaseScan</span>
+              <span>📜 View Tx & Block</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
+          </div>
+
+          <div className="flex items-center gap-2">
 
             <button
               onClick={copyProof}
@@ -207,12 +245,20 @@ export default function CertificateModal({
             </button>
           </div>
 
-          <a
-            href="/history"
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/20 hover:border-cyan-500/40 transition-all"
-          >
-            <span>📜 View All Saved Proofs in Audit History →</span>
-          </a>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <a
+              href={`/vault?hash=${encodeURIComponent(notary.docHash)}`}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition-all text-center"
+            >
+              <span>🛡️ Verify in Public Vault →</span>
+            </a>
+            <a
+              href="/history"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-white/10 hover:border-white/20 transition-all text-center"
+            >
+              <span>📜 Audit History →</span>
+            </a>
+          </div>
         </div>
       </div>
     </div>

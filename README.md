@@ -3,21 +3,24 @@
 > **Official DoraHacks Submission for BLI Legal Tech Hackathon 2**  
 > **Organized by:** Blockchain Legal Institute (BLI) & Cogent Law Group  
 > **Built by:** InnoXpert Studio (Janitha Dilshan — Lead Solutions Architect)  
-> **Category:** Legal Technology & Web3/AI Convergence  
+> **Category:** Legal Technology, RegTech, Compliance, Web3 & AI Convergence  
+> **Verified Smart Contract:** `0x74b127D9b5F08b598C4ffc8b8A40a454868FE300` (Base Sepolia EVM)  
 > **Live Demo:** [https://lexiguard-ai.vercel.app](https://lexiguard-ai.vercel.app)  
 
 ---
 
-## 🏛️ Executive Summary
+## 🏛️ Executive Summary & Dispute Minimization
 
-Traditional legal agreements—ranging from software development master service agreements (MSAs) and employment contracts to Web3 token advisory pacts—suffer from two structural vulnerabilities:
-1. **Asymmetric Risk & Hidden Liabilities:** Complex legalese conceals predatory indemnity terms, perpetual IP forfeitures, and one-sided termination clauses that disadvantage contractors and businesses.
+Traditional commercial agreements—from freelance developer contracts to enterprise Web3 master service agreements—suffer from two structural vulnerabilities:
+1. **Asymmetric Risk & Hidden Liabilities:** Complex legalese conceals predatory indemnity terms, perpetual IP forfeitures, and one-sided termination clauses that disadvantage builders and SMEs.
 2. **Post-Signing Tamper Vulnerability:** Off-chain PDF documents lack immutable cryptographic proof of existence. If a party discreetly alters terms, proving original document integrity in court requires costly forensic discovery.
 
-**LexiGuard AI solves both challenges simultaneously:**
-* **Instant AI Legal Risk Auditing:** Parses complex agreements, isolates high-risk clauses, generates a 0–100% Legal Health Score, and suggests fair, balanced redlines.
-* **On-Chain Cryptographic Proof of Existence:** Generates SHA-256 document digests anchored directly onto EVM testnets (Base Sepolia & Arbitrum Sepolia) via a dedicated Solidity smart contract, creating non-repudiable legal certificates.
-* **Master Admin Control Hub & CMS:** A full enterprise administrative portal for managing landing page content, toggling modules, and securely configuring Gemini and Web3 RPC keys without code redeployments.
+**LexiGuard AI solves both challenges under official BLI & US statutory standards:**
+* **Instant AI Legal Risk Auditing:** Powered by Google Gemini 2.5 Flash and deterministic legal heuristics to parse agreements, flag critical liabilities, generate 0–100 Legal Health Scores, and recommend balanced redlines.
+* **On-Chain Cryptographic Proof of Existence:** Anchors SHA-256 and keccak256 digests onto Base Sepolia EVM via a verified Solidity 0.8.20 smart contract, satisfying **Delaware DGCL § 224** (corporate electronic records) and **FRE Rule 902(13)&(14)** (self-authenticating digital evidence in US Federal Courts).
+* **Non-Custodial Milestone Escrow:** Autonomous 99% / 1% split escrow releasing funds to contractors upon verified milestone deliverables.
+* **Autonomous EIP-2771 Gasless Relayer:** Allows non-Web3 lawyers and hackathon judges to notarize agreements on Base Sepolia in ~2 seconds without MetaMask or testnet ETH.
+* **Master Admin Control Hub & CMS:** Complete governance portal (`/admin`) for configuring all 8 landing page sections, API keys, contractor directories, and 1% treasury fees without redeployment.
 
 ---
 

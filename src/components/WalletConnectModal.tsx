@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useWeb3 } from "@/context/Web3Context";
 import {
   X,
@@ -25,11 +26,28 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
     isMetaMaskInstalled,
     isConnecting,
     networkName,
+    enableGuestSandbox,
   } = useWeb3();
 
+  const [mounted, setMounted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen]);
+
+  if (!isOpen || !mounted) return null;
 
   const handleMetaMaskConnect = async () => {
     setErrorMessage(null);
@@ -47,14 +65,23 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md rounded-3xl bg-[#090d1a] border border-cyan-500/20 p-6 sm:p-8 shadow-[0_0_50px_-10px_rgba(6,182,212,0.3)]">
-        
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-[#090d1a] border border-cyan-500/30 p-5 sm:p-8 shadow-[0_0_50px_rgba(6,182,212,0.3)] animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer z-20"
+          title="Close modal"
         >
           <X className="w-5 h-5" />
         </button>
@@ -97,21 +124,21 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
             disabled={isConnecting}
             className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between group ${
               isMetaMaskInstalled
-                ? "bg-slate-900/90 border-white/10 hover:border-cyan-500/50 hover:bg-cyan-500/5"
+                ? "bg-slate-900/90 border-cyan-500/30 hover:border-cyan-400 hover:bg-cyan-500/10 shadow-[0_0_20px_-5px_rgba(6,182,212,0.15)]"
                 : "bg-slate-900/50 border-white/5 hover:border-amber-500/30"
             }`}
           >
             <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
-                <span className="text-lg">🦊</span>
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 text-xl shadow-inner">
+                <span>🦊</span>
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
-                    MetaMask
+                    MetaMask / Browser Wallet
                   </span>
                   {isMetaMaskInstalled ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                       Detected
                     </span>
                   ) : (
@@ -121,77 +148,62 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                   )}
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Connect your real EVM browser wallet
+                  Connect your real EVM browser wallet on Base Sepolia
                 </p>
               </div>
             </div>
-            <div className="text-slate-500 group-hover:text-cyan-400 transition-colors">
+            <div className="text-slate-500 group-hover:text-cyan-400 transition-colors text-base font-bold">
               →
             </div>
           </button>
 
-          {/* Option 2: Coinbase / Injected Web3 */}
-          <button
-            onClick={handleMetaMaskConnect}
-            disabled={isConnecting}
-            className="w-full p-4 rounded-2xl border border-white/5 bg-slate-900/60 hover:bg-slate-900/90 hover:border-blue-500/30 text-left transition-all flex items-center justify-between group"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-                <span className="text-base font-bold text-blue-400">🔵</span>
-              </div>
-              <div>
-                <span className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
-                  Coinbase / Browser Web3
+          {/* Option 2: Instant Guest / Demo Sandbox (No Wallet Required) */}
+          {enableGuestSandbox ? (
+            <div className="pt-1">
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <div className="h-px bg-white/10 flex-1" />
+                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                  Or Test Without An Extension
                 </span>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Universal EIP-1193 Web3 provider
-                </p>
+                <div className="h-px bg-white/10 flex-1" />
               </div>
-            </div>
-            <div className="text-slate-500 group-hover:text-blue-400 transition-colors">
-              →
-            </div>
-          </button>
 
-          {/* Option 3: Instant Guest / Demo Sandbox (No Wallet Required) */}
-          <div className="pt-2">
-            <div className="flex items-center gap-2 mb-2 px-1">
-              <div className="h-px bg-white/10 flex-1" />
-              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                Or Test Without a Wallet
-              </span>
-              <div className="h-px bg-white/10 flex-1" />
-            </div>
-
-            <button
-              onClick={handleRelayerConnect}
-              disabled={isConnecting}
-              className="w-full p-4 rounded-2xl border border-purple-500/20 bg-purple-950/20 hover:bg-purple-900/30 hover:border-purple-400/50 text-left transition-all flex items-center justify-between group"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
-                  <Zap className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
-                      Instant Guest Sandbox
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                      1-Click Test
-                    </span>
+              <button
+                onClick={handleRelayerConnect}
+                disabled={isConnecting}
+                className="w-full p-4 rounded-2xl border border-purple-500/20 bg-purple-950/20 hover:bg-purple-900/30 hover:border-purple-400/50 text-left transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                    <Zap className="w-5 h-5 text-purple-400" />
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Preloaded with 1.85 Sepolia ETH for judges & quick tests (No install required)
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
+                        Instant Guest Sandbox
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        1-Click Test
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Preloaded with Relayer Sepolia ETH for judges & quick tests (No install required)
+                    </p>
+                  </div>
                 </div>
+                <div className="text-slate-500 group-hover:text-purple-400 transition-colors">
+                  →
+                </div>
+              </button>
+            </div>
+          ) : (
+            <div className="pt-2">
+              <div className="p-3.5 rounded-2xl bg-slate-900/40 border border-white/5 text-slate-400 text-xs flex items-center gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span>InnoXpert Guest Sandbox is disabled by Admin. Please connect MetaMask to continue.</span>
               </div>
-              <div className="text-slate-500 group-hover:text-purple-400 transition-colors">
-                →
-              </div>
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Informational Footer */}
@@ -203,6 +215,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
           <span className="text-slate-500">BLI Legal Tech 2026</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

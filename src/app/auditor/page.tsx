@@ -43,6 +43,7 @@ import {
   BookOpen
 } from "lucide-react";
 import SampleContractsModal from "@/components/SampleContractsModal";
+import FormattedChatMessage from "@/components/FormattedChatMessage";
 import { TEN_TEST_LEGAL_CONTRACTS, SampleContractDoc } from "@/lib/sampleContractsLibrary";
 import {
   SAMPLE_CONTRACTS,
@@ -401,7 +402,7 @@ export default function AuditorPage() {
       const updated = deductUserCredit(account);
       setCredits(updated);
 
-      await saveNotarizedContract(auditReport, res);
+      await saveNotarizedContract(auditReport, res, contractText);
 
       await logCreditUsage({
         walletAddress: account,
@@ -889,13 +890,13 @@ export default function AuditorPage() {
                   {chatMessages.map((msg, i) => (
                     <div
                       key={i}
-                      className={`p-3.5 rounded-2xl max-w-[90%] leading-relaxed whitespace-pre-wrap ${
+                      className={`p-3.5 rounded-2xl max-w-[90%] leading-relaxed ${
                         msg.sender === "user"
                           ? "ml-auto bg-cyan-500/20 text-cyan-100 border border-cyan-500/30"
                           : "mr-auto bg-slate-950/80 text-slate-200 border border-white/10 shadow-lg"
                       }`}
                     >
-                      {msg.text}
+                      <FormattedChatMessage content={msg.text} isUser={msg.sender === "user"} />
                     </div>
                   ))}
 
@@ -915,7 +916,7 @@ export default function AuditorPage() {
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Ask any question about this contract (English or සිංහල)..."
+                    placeholder="Ask any question about this contract (e.g. liability caps, termination traps)..."
                     className="flex-1 rounded-xl bg-slate-950 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none border border-white/10 focus:border-cyan-400"
                   />
                   <button
@@ -1620,6 +1621,8 @@ export default function AuditorPage() {
         title={contractTitle}
         score={auditReport?.overallScore || 0}
         notary={notarizationResult}
+        contractText={contractText}
+        auditReport={auditReport}
       />
 
       {/* Top-Up Modal */}
@@ -1694,13 +1697,13 @@ export default function AuditorPage() {
             {chatMessages.map((msg, i) => (
               <div
                 key={i}
-                className={`p-3.5 rounded-2xl max-w-[90%] leading-relaxed whitespace-pre-wrap ${
+                className={`p-3.5 rounded-2xl max-w-[90%] leading-relaxed ${
                   msg.sender === "user"
                     ? "ml-auto bg-cyan-500/20 text-cyan-100 border border-cyan-500/30"
                     : "mr-auto bg-slate-900/90 text-slate-200 border border-white/10 shadow-md"
                 }`}
               >
-                {msg.text}
+                <FormattedChatMessage content={msg.text} isUser={msg.sender === "user"} />
               </div>
             ))}
             {isChatThinking && (
@@ -1718,7 +1721,7 @@ export default function AuditorPage() {
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-              placeholder="Ask anything about this contract (English or සිංහල)..."
+              placeholder="Ask anything about this contract (e.g. liability caps, termination traps)..."
               className="flex-1 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none border border-white/10 focus:border-cyan-400"
             />
             <button

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Sparkles,
@@ -23,6 +24,7 @@ import {
   DEFAULT_SITE_SETTINGS,
 } from "@/lib/firestoreService";
 import { purchaseAuditCreditsOnChain } from "@/lib/web3Service";
+import { parseEther } from "viem";
 
 interface TopUpModalProps {
   isOpen: boolean;
@@ -35,7 +37,8 @@ export default function TopUpModal({
   onClose,
   onCreditsPurchased,
 }: TopUpModalProps) {
-  const { account, chainId, connectionType, connectMetaMask } = useWeb3();
+  const { account, balance, chainId, connectionType, connectMetaMask, refreshBalance, enableGuestSandbox, networkMode } = useWeb3();
+  const [mounted, setMounted] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SITE_SETTINGS);
   const [selectedPackIndex, setSelectedPackIndex] = useState(1); // Default to Pro Pack
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -45,18 +48,73 @@ export default function TopUpModal({
     credits: number;
     packName: string;
     isRealOnChain: boolean;
+    blockNumber?: number;
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentCredits, setCurrentCredits] = useState(3);
+  const [liveAccount, setLiveAccount] = useState<string | null>(account);
+  const [liveBalance, setLiveBalance] = useState<string | null>(null);
+
+  // Fetch live active MetaMask account and on-chain balance directly
+  const syncLiveMetaMaskAccount = async () => {
+    if (typeof window === "undefined" || !(window as any).ethereum) {
+      setLiveAccount(account);
+      return;
+    }
+    try {
+      const eth = (window as any).ethereum;
+      const accounts = await eth.request({ method: "eth_accounts" });
+      const current = accounts && accounts[0] ? accounts[0] : account;
+      setLiveAccount(current);
+      if (current) {
+        const rawBal = await eth.request({
+          method: "eth_getBalance",
+          params: [current, "latest"],
+        });
+        const wei = BigInt(rawBal || "0");
+        setLiveBalance((Number(wei) / 1e18).toFixed(4));
+      }
+    } catch {
+      setLiveAccount(account);
+    }
+  };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
+      document.body.style.overflow = "hidden";
       getSiteSettings().then(setSettings);
       setCurrentCredits(getUserCredits(account));
       setPurchaseSuccess(null);
       setErrorMessage(null);
+      syncLiveMetaMaskAccount();
+    } else {
+      document.body.style.overflow = "unset";
     }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
   }, [isOpen, account]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !(window as any).ethereum) return;
+    const eth = (window as any).ethereum;
+    const handleAccChange = (accs: string[]) => {
+      if (accs && accs[0]) {
+        setLiveAccount(accs[0]);
+        eth.request({ method: "eth_getBalance", params: [accs[0], "latest"] })
+          .then((raw: string) => setLiveBalance((Number(BigInt(raw || "0")) / 1e18).toFixed(4)))
+          .catch(() => {});
+      }
+    };
+    eth.on?.("accountsChanged", handleAccChange);
+    return () => {
+      eth.removeListener?.("accountsChanged", handleAccChange);
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -65,7 +123,7 @@ export default function TopUpModal({
       id: "starter",
       name: "Starter Bundle",
       credits: 5,
-      priceEth: settings.starterPackPriceEth || "0.005",
+      priceEth: settings.starterPackPriceEth || "0.0001",
       badge: "Basic",
       badgeColor: "bg-blue-500/10 text-blue-300 border-blue-500/20",
       description: "Quick contract risk scan & basic redline recommendations.",
@@ -74,7 +132,7 @@ export default function TopUpModal({
       id: "pro",
       name: "Pro Builder Pack",
       credits: 15,
-      priceEth: settings.proPackPriceEth || "0.012",
+      priceEth: settings.proPackPriceEth || "0.0002",
       badge: "Most Popular",
       badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
       description: "Deep AI clause audit, liability flags & on-chain notary access.",
@@ -83,7 +141,7 @@ export default function TopUpModal({
       id: "agency",
       name: "Agency Unlimited Pass",
       credits: 50,
-      priceEth: settings.agencyPackPriceEth || "0.030",
+      priceEth: settings.agencyPackPriceEth || "0.0005",
       badge: "High Volume",
       badgeColor: "bg-purple-500/10 text-purple-300 border-purple-500/20",
       description: "Bulk legal auditing for software houses, DAOs & enterprise teams.",
@@ -92,7 +150,7 @@ export default function TopUpModal({
 
   const selectedPack = packs[selectedPackIndex];
 
-  // 1. Pay with MetaMask (Sends REAL live transaction to Base Sepolia testnet)
+  // 1. Pay with MetaMask (Sends REAL live transaction from User to Owner Treasury)
   const handleBuyWithMetaMask = async () => {
     setIsPurchasing(true);
     setErrorMessage(null);
@@ -100,49 +158,71 @@ export default function TopUpModal({
     try {
       if (typeof window === "undefined" || !(window as any).ethereum) {
         throw new Error(
-          "MetaMask extension is not detected in your browser. Please install MetaMask or use 'Instant Sandbox Top-Up' below."
+          "MetaMask extension is not detected in your browser. Please install MetaMask to interact on-chain."
         );
       }
 
-      let activeAccount = account;
-      // If not connected via MetaMask, connect now
-      if (connectionType !== "metamask" || !activeAccount) {
-        const connectRes = await connectMetaMask();
-        if (!connectRes.success) {
-          throw new Error(connectRes.error || "MetaMask connection was rejected.");
-        }
-        const accounts = await (window as any).ethereum.request({ method: "eth_accounts" });
-        activeAccount = accounts && accounts[0] ? accounts[0] : null;
+      const eth = (window as any).ethereum;
+
+      // 1. Always prompt/retrieve currently active account directly from MetaMask
+      const accounts = await eth.request({ method: "eth_requestAccounts" });
+      const activeMetaMaskAccount = accounts && accounts[0] ? accounts[0] : null;
+
+      if (!activeMetaMaskAccount) {
+        throw new Error("No active MetaMask wallet account found. Please unlock MetaMask.");
       }
 
-      if (!activeAccount) {
-        throw new Error("No active MetaMask wallet account found.");
+      setLiveAccount(activeMetaMaskAccount);
+
+      // 2. Fetch live on-chain balance of this exact active MetaMask account
+      let currentWei = 0n;
+      try {
+        const rawBalHex = await eth.request({
+          method: "eth_getBalance",
+          params: [activeMetaMaskAccount, "latest"],
+        });
+        currentWei = BigInt(rawBalHex || "0");
+        setLiveBalance((Number(currentWei) / 1e18).toFixed(4));
+      } catch (balErr) {
+        console.warn("Could not query live eth_getBalance:", balErr);
       }
 
-      const treasury = settings.ownerTreasuryAddress || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
-      const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
+      const packPriceEth = selectedPack.priceEth;
+      const requiredWei = parseEther(packPriceEth);
+
+      if (currentWei < requiredWei) {
+        const currentEthFormatted = (Number(currentWei) / 1e18).toFixed(4);
+        throw new Error(
+          `Insufficient funds in your active MetaMask account (${activeMetaMaskAccount.slice(0, 6)}...${activeMetaMaskAccount.slice(-4)}). You have ${currentEthFormatted} ETH, but ${packPriceEth} ETH is required for ${selectedPack.name}. Please claim free Base Sepolia ETH from the Superchain Faucet below.`
+        );
+      }
+
+      const treasury = settings.ownerTreasuryAddress || "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300";
+      const networkKey = networkMode === "mainnet" ? "base-mainnet" : "base-sepolia";
 
       const res = await purchaseAuditCreditsOnChain(
         selectedPack.priceEth,
         treasury,
-        activeAccount,
+        activeMetaMaskAccount,
         networkKey,
-        true // isMetaMask = true -> Triggers real eth_sendTransaction in MetaMask!
+        true, // isMetaMask = true -> Triggers real eth_sendTransaction from User to Owner
+        networkMode
       );
 
       // Save to Firestore and LocalStorage
       await saveCreditPurchase({
-        walletAddress: activeAccount,
+        walletAddress: activeMetaMaskAccount,
         packName: selectedPack.name,
         creditsAdded: selectedPack.credits,
         amountEth: selectedPack.priceEth,
         txHash: res.txHash,
-        network: "Base Sepolia Testnet",
+        network: networkMode === "mainnet" ? "Base Mainnet" : "Base Sepolia Testnet",
       });
 
-      // Update user credits
-      const updatedTotal = addUserCredits(activeAccount, selectedPack.credits);
+      // Update user credits and refresh live on-chain balance
+      const updatedTotal = addUserCredits(activeMetaMaskAccount, selectedPack.credits);
       setCurrentCredits(updatedTotal);
+      await refreshBalance();
 
       // Confetti celebration
       confetti({
@@ -157,6 +237,7 @@ export default function TopUpModal({
         credits: selectedPack.credits,
         packName: selectedPack.name,
         isRealOnChain: true,
+        blockNumber: res.blockNumber,
       });
 
       if (onCreditsPurchased) {
@@ -165,8 +246,8 @@ export default function TopUpModal({
     } catch (err: any) {
       console.error("MetaMask purchase failed:", err);
       let msg = err.message || "Failed to complete transaction.";
-      if (msg.toLowerCase().includes("insufficient funds")) {
-        msg = `Insufficient Base Sepolia ETH in your MetaMask wallet for ${selectedPack.priceEth} ETH + gas fee. You can use 'Instant Sandbox Top-Up' below to test with zero gas!`;
+      if (err?.code === 4001 || msg.includes("User rejected")) {
+        msg = "Transaction request was cancelled in MetaMask.";
       }
       setErrorMessage(msg);
     } finally {
@@ -174,22 +255,28 @@ export default function TopUpModal({
     }
   };
 
-  // 2. Instant Sandbox Demo Top-Up (Zero Gas test for judges/visitors)
+  // 2. Instant Sandbox Demo Top-Up (Zero Gas test for judges/visitors - Restricted to 5 Audits Starter Bundle)
   const handleBuySandbox = async () => {
+    if (selectedPack.id !== "starter") {
+      setErrorMessage("Instant Sandbox Demo is exclusively available for the 5 Audits Starter Bundle. Please use MetaMask for larger packs.");
+      return;
+    }
+
     setIsPurchasing(true);
     setErrorMessage(null);
 
     try {
-      const treasury = settings.ownerTreasuryAddress || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
-      const networkKey = chainId === 421614 ? "arbitrum-sepolia" : "base-sepolia";
-      const targetAccount = account || "0x7F2B89a468eB3f4D9165b4c10a12e87319E454E2";
+      const treasury = settings.ownerTreasuryAddress || "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300";
+      const networkKey = networkMode === "mainnet" ? "base-mainnet" : "base-sepolia";
+      const targetAccount = account || "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300";
 
       const res = await purchaseAuditCreditsOnChain(
         selectedPack.priceEth,
         treasury,
         targetAccount,
         networkKey,
-        false // Sandbox mode
+        false, // Sandbox mode: zero gas demo, NEVER deducts owner's wallet!
+        networkMode
       );
 
       // Save to Firestore and LocalStorage
@@ -218,6 +305,7 @@ export default function TopUpModal({
         credits: selectedPack.credits,
         packName: selectedPack.name,
         isRealOnChain: false,
+        blockNumber: 47998432,
       });
 
       if (onCreditsPurchased) {
@@ -231,13 +319,25 @@ export default function TopUpModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="relative w-full max-w-lg rounded-3xl bg-[#090d1a] border border-cyan-500/30 p-6 sm:p-8 shadow-[0_0_50px_-10px_rgba(6,182,212,0.3)] space-y-6">
+  if (!isOpen || !mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-[#090d1a] border border-cyan-500/30 p-5 sm:p-8 shadow-[0_0_50px_rgba(6,182,212,0.3)] space-y-6 animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Close Button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer z-20"
+          title="Close modal"
         >
           <X className="w-5 h-5" />
         </button>
@@ -252,26 +352,33 @@ export default function TopUpModal({
             Top Up AI Legal Audit Credits
           </h3>
           <p className="text-xs text-slate-400">
-            Purchase audit credits via native Base Sepolia EVM. Funds transfer directly to InnoXpert Treasury with zero intermediary fees.
+            Purchase audit credits via native {networkMode === "mainnet" ? "Base Mainnet" : "Base Sepolia"} EVM. Funds transfer directly to InnoXpert Treasury with zero intermediary fees.
           </p>
         </div>
 
         {/* Current Balance Bar */}
         <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/5 flex items-center justify-between text-xs">
-          <span className="text-slate-400">
-            {connectionType === "metamask" && account
-              ? `MetaMask Wallet (${account.slice(0, 6)}...${account.slice(-4)}):`
-              : account
-              ? `Session Wallet (${account.slice(0, 6)}...${account.slice(-4)}):`
-              : "Wallet Status:"}
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-slate-400 text-[11px]">
+              {connectionType === "metamask" && account
+                ? `MetaMask (${account.slice(0, 6)}...${account.slice(-4)})`
+                : account
+                ? `Session (${account.slice(0, 6)}...${account.slice(-4)})`
+                : "Wallet Status:"}
+            </span>
+            {account && (
+              <span className="font-mono text-xs font-bold text-amber-300">
+                Live: {balance || "0.0000 ETH"}
+              </span>
+            )}
+          </div>
           {account ? (
-            <span className="font-mono font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+            <span className="font-mono font-bold text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1">
               <Zap className="w-3.5 h-3.5 text-cyan-400" />
               {currentCredits} Audits Left
             </span>
           ) : (
-            <span className="font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+            <span className="font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1">
               <Wallet className="w-3.5 h-3.5 text-amber-400" />
               Not Connected
             </span>
@@ -280,11 +387,23 @@ export default function TopUpModal({
 
         {/* Error Alert */}
         {errorMessage && (
-          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs space-y-1">
+          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs space-y-2">
             <div className="font-bold flex items-center gap-1.5">
               <span>⚠️ Action Required:</span>
             </div>
             <p className="leading-relaxed">{errorMessage}</p>
+            {networkMode === "testnet" && (
+              <div className="pt-1">
+                <a
+                  href="https://console.optimism.io/faucet"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-[11px] transition-all"
+                >
+                  <span>💧 Claim Free Base Sepolia ETH on Superchain Faucet ↗</span>
+                </a>
+              </div>
+            )}
           </div>
         )}
 
@@ -309,7 +428,9 @@ export default function TopUpModal({
               <div className="p-3 rounded-xl bg-black/60 border border-emerald-500/30 text-[11px] font-mono text-cyan-300 break-all flex flex-col gap-1.5 text-left">
                 <div className="flex items-center justify-between text-[10px] text-slate-400">
                   <span>LIVE TRANSACTION HASH:</span>
-                  <span className="text-emerald-400 font-bold">Mined Just Now</span>
+                  <span className="text-emerald-400 font-bold">
+                    {purchaseSuccess.blockNumber ? `Base Sepolia Block #${purchaseSuccess.blockNumber}` : "Mined on Base Sepolia"}
+                  </span>
                 </div>
                 <span className="text-slate-200 select-all font-mono text-[10px]">
                   {purchaseSuccess.txHash}
@@ -421,16 +542,50 @@ export default function TopUpModal({
               })}
             </div>
 
-            {/* Treasury Notice */}
-            <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5 text-[11px] text-slate-400 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Lock className="w-3 h-3 text-cyan-400" />
-                <span>Recipient: InnoXpert Treasury</span>
-              </span>
-              <span className="font-mono text-slate-300">
-                {settings.ownerTreasuryAddress.slice(0, 6)}...{settings.ownerTreasuryAddress.slice(-4)}
-              </span>
+            {/* Live Payment Routing Info */}
+            <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5 text-[11px] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-slate-400">
+                  <Wallet className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Paying From (Your Wallet):</span>
+                </span>
+                <div className="text-right">
+                  <span className="font-mono text-cyan-300 font-bold block">
+                    {liveAccount
+                      ? `${liveAccount.slice(0, 6)}...${liveAccount.slice(-4)}`
+                      : account
+                      ? `${account.slice(0, 6)}...${account.slice(-4)}`
+                      : "MetaMask Not Connected"}
+                  </span>
+                  {liveBalance !== null && (
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Balance: {liveBalance} ETH
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-t border-white/5 pt-1.5">
+                <span className="flex items-center gap-1.5 text-slate-400">
+                  <Lock className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Recipient (InnoXpert Treasury):</span>
+                </span>
+                <span className="font-mono text-slate-300 font-medium">
+                  {settings.ownerTreasuryAddress.slice(0, 6)}...{settings.ownerTreasuryAddress.slice(-4)}
+                </span>
+              </div>
             </div>
+
+            {/* Helpful Notice if user wallet currently matches owner treasury */}
+            {(liveAccount || account)?.toLowerCase() === settings.ownerTreasuryAddress.toLowerCase() && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 space-y-1">
+                <div className="font-bold flex items-center gap-1">
+                  <span>ℹ️ Testing Note:</span>
+                </div>
+                <p className="text-[10px] text-amber-200/90 leading-relaxed">
+                  Your active wallet in MetaMask is currently set to the <strong>Owner Treasury address</strong>. If you want to simulate a customer purchasing credits, please switch to your user wallet account (e.g. <strong>Account 2: 0x92747...D7d05</strong>) in MetaMask.
+                </p>
+              </div>
+            )}
 
             {/* Dual Purchase Actions */}
             <div className="space-y-2.5 pt-1">
@@ -443,42 +598,75 @@ export default function TopUpModal({
                 {isPurchasing ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin text-black" />
-                    <span>Broadcasting Live via MetaMask...</span>
+                    <span>Broadcasting & Mining Block on {networkMode === "mainnet" ? "Base Mainnet" : "Base Sepolia"}...</span>
                   </>
                 ) : (
                   <>
                     <span className="text-base">🦊</span>
                     <span>
-                      Pay with MetaMask ({selectedPack.priceEth} ETH — Live BaseScan Broadcast)
+                      Pay {selectedPack.priceEth} ETH with MetaMask
                     </span>
                   </>
                 )}
               </button>
 
-              {/* Divider */}
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-white/10"></div>
-                <span className="flex-shrink mx-3 text-[10px] text-slate-500 uppercase tracking-widest font-semibold">
-                  Or Test Without Gas
-                </span>
-                <div className="flex-grow border-t border-white/10"></div>
-              </div>
+              {/* Option 2: Instant Sandbox Demo (Only when Guest Sandbox is enabled on Testnet AND ONLY for Starter 5 Audits Pack) */}
+              {enableGuestSandbox && networkMode === "testnet" && (
+                selectedPack.id === "starter" ? (
+                  <>
+                    <div className="relative flex py-1 items-center">
+                      <div className="flex-grow border-t border-white/10"></div>
+                      <span className="flex-shrink mx-3 text-[10px] text-slate-500 uppercase tracking-widest font-semibold">
+                        Or Test Demo Without Gas
+                      </span>
+                      <div className="flex-grow border-t border-white/10"></div>
+                    </div>
 
-              {/* Option 2: Instant Sandbox Demo */}
-              <button
-                onClick={handleBuySandbox}
-                disabled={isPurchasing}
-                className="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-900/90 hover:bg-slate-800/90 border border-cyan-500/30 hover:border-cyan-400 text-cyan-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Zap className="w-3.5 h-3.5 text-cyan-400" />
-                <span>
-                  Instant Sandbox Top-Up (Zero Gas Demo — +{selectedPack.credits} Audits)
-                </span>
-              </button>
+                    <button
+                      onClick={handleBuySandbox}
+                      disabled={isPurchasing}
+                      className="w-full py-2.5 rounded-xl font-bold text-xs bg-slate-900/90 hover:bg-slate-800/90 border border-cyan-500/30 hover:border-cyan-400 text-cyan-300 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:shadow-[0_0_15px_-3px_rgba(6,182,212,0.3)] active:scale-[0.99]"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>
+                        Instant Sandbox Top-Up (Zero Gas Demo — +5 Audits)
+                      </span>
+                    </button>
+                  </>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-purple-500/5 border border-purple-500/15 text-center">
+                    <p className="text-[10px] text-purple-300/80 font-medium flex items-center justify-center gap-1.5">
+                      <Zap className="w-3 h-3 text-purple-400 shrink-0" />
+                      <span>
+                        Zero-gas demo top-up is exclusive to the <strong>Starter (5 Audits)</strong> pack.
+                      </span>
+                    </p>
+                  </div>
+                )
+              )}
+
+              {/* Free Testnet Faucet Quick Link (Only displayed when Testnet Mode is enabled by Admin) */}
+              {networkMode === "testnet" && (
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                    <span>💧 Need free Base Sepolia ETH?</span>
+                  </span>
+                  <a
+                    href="https://console.optimism.io/faucet"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-cyan-400 hover:text-cyan-300 font-semibold underline flex items-center gap-1"
+                    title="Get free Base Sepolia ETH from Superchain Faucet"
+                  >
+                    <span>Superchain Faucet ↗</span>
+                  </a>
+                </div>
+              )}
             </div>
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

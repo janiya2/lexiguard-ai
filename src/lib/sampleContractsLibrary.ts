@@ -34,7 +34,10 @@ export const TEN_TEST_LEGAL_CONTRACTS: SampleContractDoc[] = [
     ],
     fullText: `MASTER SERVICES AGREEMENT (FREELANCER ENGAGEMENT)
 
-This Master Services Agreement ("Agreement") is entered into by and between Enterprise Client Corp ("Client") and the Independent Contractor ("Contractor").
+This Master Services Agreement ("Agreement") is made and entered into on this 13th day of October, 2026, by and between Enterprise Client Corp ("Client") and the Independent Contractor ("Contractor").
+
+WHEREAS, Client desires to retain Contractor to perform software development and technical services, and Contractor desires to perform such services under the terms herein;
+NOW, THEREFORE, the Parties agree as follows:
 
 1. IP ASSIGNMENT & PERPETUAL EXCLUSIVITY:
 The Contractor irrevocably assigns, transfers, and conveys to Client all rights, title, and interest in and to all inventions, software source code, designs, algorithms, methodologies, and general knowledge acquired during or prior to this engagement to the Client in perpetuity across the universe without compensation beyond the base milestone invoice.
@@ -48,8 +51,23 @@ Invoices shall be payable Net 90 days following Client's subjective verification
 4. TERMINATION WITHOUT CAUSE & FORFEITURE:
 Client may terminate this Agreement immediately at any time without advance notice and without obligation to compensate Contractor for in-progress hours or unapproved milestones. Contractor must provide 60 days advance written notice.
 
-5. GOVERNING LAW & JURISDICTION:
-This Agreement shall be governed strictly by the laws of the State of Delaware. Contractor agrees to submit exclusively to the courts of New Castle County, Delaware, bearing all travel and legal costs personally.`
+5. NON-COMPETE & RESTRICTIVE COVENANTS:
+Contractor agrees not to engage, consult, or provide services to any competitor of Client globally for a period of twenty-four (24) months following termination, without geographic limitation.
+
+6. UNILATERAL SCOPE CHANGES:
+Client reserves the right to modify deliverables, milestones, and technical specifications at any time without adjusting project timeline or compensation.
+
+7. WORK-FOR-HIRE & MORAL RIGHTS SURRENDER:
+Contractor irrevocably waives all moral rights, paternity rights, and integrity rights in any deliverables created under this Agreement, in all jurisdictions worldwide.
+
+8. AUDIT & SURVEILLANCE RIGHTS:
+Client shall have continuous unrestricted access to inspect Contractor's local development environment, repositories, and private hardware during the term of this engagement.
+
+9. GOVERNING LAW & JURISDICTION:
+This Agreement shall be governed strictly by the laws of the State of Delaware. Contractor agrees to submit exclusively to the courts of New Castle County, Delaware, bearing all travel and legal costs personally.
+
+10. ENTIRE AGREEMENT & AMENDMENT RESTRICTIONS:
+This Agreement supersedes all prior agreements. Client may unilaterally amend these terms upon posting revised terms, which shall take immediate effect.`
   },
   {
     id: "test-02-mutual-nda",
@@ -68,22 +86,42 @@ This Agreement shall be governed strictly by the laws of the State of Delaware. 
     ],
     fullText: `MUTUAL NON-DISCLOSURE AND CONFIDENTIALITY AGREEMENT
 
-This Mutual Non-Disclosure Agreement ("Agreement") is made between Party A and Party B (collectively, the "Parties") for the purpose of exploring a mutual technology collaboration.
+This Mutual Non-Disclosure Agreement ("Agreement") is made and entered into on this 13th day of October, 2026, by and between:
+Party A ("Disclosing/Receiving Party") and Party B ("Disclosing/Receiving Party"), collectively referred to as the "Parties".
+
+WHEREAS, the Parties desire to engage in confidential business and technical discussions regarding mutual software engineering, smart contract integration, and commercial collaboration; and
+WHEREAS, such exploration requires the exchange of valuable proprietary materials, source code, cryptographic assets, and trade secrets;
+NOW, THEREFORE, in consideration of the mutual covenants contained herein, the Parties agree as follows:
 
 1. DEFINITION OF CONFIDENTIAL INFORMATION:
 Confidential Information includes all non-public technical, operational, smart contract architecture, cryptographic keys, financial, and business information disclosed by either party, whether orally or in writing.
 
-2. MUTUAL OBLIGATIONS OF NON-DISCLOSURE:
-Each party agrees to safeguard the other party's Confidential Information with the same degree of care as its own proprietary data, but no less than reasonable care. Neither party shall disclose Confidential Information to third parties without prior written consent.
+2. MUTUAL OBLIGATIONS OF NON-DISCLOSURE & STANDARD OF CARE:
+Each party agrees to safeguard the other party's Confidential Information with the same degree of care as its own proprietary data, but no less than reasonable care. Neither party shall disclose Confidential Information to third parties without prior written consent. Access shall be restricted strictly to authorized personnel with a clear need to know.
 
-3. STANDARD EXCLUSIONS:
-Confidential Information shall not include information that: (a) is or becomes publicly known through no breach of this Agreement; (b) was already known to receiving party prior to disclosure; (c) is independently developed without reference to disclosing party's data.
+3. STANDARD PERMITTED EXCLUSIONS:
+Confidential Information shall not include information that: (a) is or becomes publicly known through no breach of this Agreement; (b) was already known to receiving party prior to disclosure; (c) is independently developed without reference to disclosing party's data; or (d) is required to be disclosed pursuant to a lawful court order.
 
-4. TERM & SURVIVAL:
-The confidentiality obligations under this Agreement shall survive for a period of two (2) years following the date of disclosure.
+4. RETURN OR CERTIFIED CRYPTOGRAPHIC DESTRUCTION:
+Upon written request or upon termination of discussions, the receiving party shall promptly return or permanently destroy all documents, digital media, repositories, and cryptographic keys containing Confidential Information, and certify such action in writing within fourteen (14) days.
 
-5. EQUITABLE REMEDIES:
-The parties acknowledge that unauthorized disclosure may cause irreparable harm for which monetary damages are inadequate, entitling the non-breaching party to seek injunctive relief.`
+5. INTELLECTUAL PROPERTY & NO IMPLIED LICENSE:
+All Confidential Information remains the exclusive property of the disclosing party. Nothing in this Agreement shall be construed as granting or conferring, either expressly or by implication, any license, patent, copyright, trademark, or ownership interest in the disclosing party's intellectual property.
+
+6. TERM, DURATION & SURVIVAL:
+The confidentiality obligations under this Agreement shall survive for a period of two (2) years following the date of disclosure; provided that trade secrets and core smart contract security blueprints shall remain protected indefinitely.
+
+7. NON-CIRCUMVENTION & MUTUAL INTEGRITY:
+The Parties agree not to bypass, circumvent, or avoid each other regarding proprietary contacts, developers, clients, or investors introduced during the confidential disclosure period for a duration of twelve (12) months.
+
+8. EQUITABLE REMEDIES & INJUNCTIVE RELIEF:
+The parties acknowledge that unauthorized disclosure may cause irreparable harm for which monetary damages are inadequate, entitling the non-breaching party to seek injunctive relief without bond.
+
+9. GOVERNING LAW & DECENTRALIZED ARBITRATION:
+This Agreement shall be governed in accordance with international commercial legal standards and the procedural guidelines established by the Blockchain Legal Institute (BLI). Any dispute shall be resolved through binding digital arbitration before an accredited panel.
+
+10. ENTIRE AGREEMENT & MISCELLANEOUS:
+This Agreement represents the entire understanding between the Parties regarding confidentiality and supersedes all prior discussions. Any modification must be executed in writing by both Parties.`
   },
   {
     id: "test-03-web3-token-advisor",
