@@ -67,6 +67,19 @@ export async function POST(req: Request) {
         });
       }
 
+      // 1% Protocol Fee routing to Platform Owner Treasury (0x74b1dcD4...E300)
+      const treasuryAddress = (settings.ownerTreasuryAddress || "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300") as `0x${string}`;
+      if (parseFloat(protocolEth) > 0 && treasuryAddress.toLowerCase() !== recipient.toLowerCase()) {
+        try {
+          await walletClient.sendTransaction({
+            to: treasuryAddress,
+            value: parseEther(protocolEth),
+          });
+        } catch (feeErr: any) {
+          console.warn("Owner treasury protocol fee settlement notice:", feeErr?.message);
+        }
+      }
+
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 20_000 });
 
       return NextResponse.json({

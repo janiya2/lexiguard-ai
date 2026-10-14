@@ -125,8 +125,8 @@ export default function EscrowVaultSection() {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
 
-  // Role Perspective: "client" vs "contractor"
-  const [userRole, setUserRole] = useState<"client" | "contractor">("client");
+  // Ledger View Scope: "MY_ESCROWS" | "AS_CLIENT" | "AS_CONTRACTOR" | "GLOBAL_LEDGER"
+  const [ledgerScope, setLedgerScope] = useState<"MY_ESCROWS" | "AS_CLIENT" | "AS_CONTRACTOR" | "GLOBAL_LEDGER">("MY_ESCROWS");
 
   // Escrow Filter Tabs
   const [activeTab, setActiveTab] = useState<"ALL" | "LOCKED" | "SUBMITTED" | "RELEASED">("ALL");
@@ -238,12 +238,24 @@ export default function EscrowVaultSection() {
         (c) => c.walletAddress && c.walletAddress.startsWith("0x") && c.walletAddress.length === 42
       );
       setContractorsList(valid);
-      if (valid.length > 0 && !selectedContractor) {
-        setSelectedContractor(valid[0]);
-      }
+      const defaultPick =
+        account && valid[0]?.walletAddress.toLowerCase() === account.toLowerCase()
+          ? (valid[1] || valid[0])
+          : (valid[1] || valid[0]);
+      setSelectedContractor((prev) => prev || defaultPick);
     }
     load();
-  }, []);
+  }, [account]);
+
+  // Prevent self-contractor selection if client address matches contractor
+  useEffect(() => {
+    if (account && selectedContractor && selectedContractor.walletAddress.toLowerCase() === account.toLowerCase()) {
+      const other = contractorsList.find(c => c.walletAddress.toLowerCase() !== account.toLowerCase());
+      if (other) {
+        setSelectedContractor(other);
+      }
+    }
+  }, [account, contractorsList, selectedContractor]);
 
   // Handle Client Document File Upload & Instant SHA-256 Hashing
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -402,8 +414,17 @@ export default function EscrowVaultSection() {
     }
   };
 
-  // Open Contractor Submission Modal
+  // Open Contractor Submission Modal (Restricted to Assigned Contractor)
   const openSubmitModal = (esc: any) => {
+    const isCurrentContractor = Boolean(
+      account && esc.contractor && esc.contractor.toLowerCase() === account.toLowerCase()
+    );
+    if (account && !isCurrentContractor) {
+      setErrorMessage(
+        `Unauthorized Access: Only the assigned contractor (${esc.contractorName || (esc.contractor ? esc.contractor.slice(0, 6) + "..." : "Contractor")}) is authorized to submit milestone deliverables.`
+      );
+      return;
+    }
     setActiveEscrowForSubmit(esc);
     setDeliverableUrl(esc.deliverableUrl || "");
     setSubmissionNotes(esc.submissionNotes || "");
@@ -447,8 +468,18 @@ export default function EscrowVaultSection() {
     }
   };
 
-  // Client approves and releases on-chain funds to contractor
+  // Client approves and releases on-chain funds to contractor (Restricted to Depositor Client)
   const handleRelease = async (esc: any) => {
+    const isCurrentClient = Boolean(
+      account && esc.client && esc.client.toLowerCase() === account.toLowerCase()
+    );
+    if (account && !isCurrentClient) {
+      setErrorMessage(
+        `Security Violation: Only the client (${esc.client ? esc.client.slice(0, 6) + "..." + esc.client.slice(-4) : "Client"}) who funded this escrow can authorize payout release. Your connected account (${account.slice(0, 6)}...${account.slice(-4)}) is not authorized.`
+      );
+      return;
+    }
+
     const targetId = esc.agreementId || esc.id;
     setReleasingId(targetId);
 
@@ -685,9 +716,28 @@ export default function EscrowVaultSection() {
     });
   };
 
+  // Ownership helpers for strict access control & privacy
+  const isClientOf = (esc: any) =>
+    Boolean(account && esc.client && esc.client.toLowerCase() === account.toLowerCase());
+  const isContractorOf = (esc: any) =>
+    Boolean(account && esc.contractor && esc.contractor.toLowerCase() === account.toLowerCase());
+  const isPartyOf = (esc: any) => isClientOf(esc) || isContractorOf(esc);
+
+  const myTotalCount = account ? escrows.filter(isPartyOf).length : 0;
+  const myClientCount = account ? escrows.filter(isClientOf).length : 0;
+  const myContractorCount = account ? escrows.filter(isContractorOf).length : 0;
+
   // Filtered list strictly sorted with most recent at top
   const filteredEscrows = escrows
     .filter((esc) => {
+      // 1. Account Scope Filter (If connected, default strictly to user's own orders unless GLOBAL_LEDGER is chosen)
+      if (account && ledgerScope !== "GLOBAL_LEDGER") {
+        if (ledgerScope === "MY_ESCROWS" && !isPartyOf(esc)) return false;
+        if (ledgerScope === "AS_CLIENT" && !isClientOf(esc)) return false;
+        if (ledgerScope === "AS_CONTRACTOR" && !isContractorOf(esc)) return false;
+      }
+
+      // 2. Status Tab Filter
       if (activeTab === "ALL") return true;
       return esc.status === activeTab;
     })
@@ -1156,34 +1206,100 @@ export default function EscrowVaultSection() {
             </form>
           </div>
 
-          {/* ACTIVE ESCROWS LEDGER WITH STRICT ROLE ACTIONS */}
+          {/* ACTIVE ESCROWS LEDGER WITH STRICT ROLE ACTIONS & PRIVACY */}
           <div id="escrow-orders-ledger" className="lg:col-span-7 min-w-0 space-y-4">
             
-            {/* Header: Dedicated Client Escrow Orders Ledger */}
+            {/* Header: Dedicated Escrow Orders Ledger with Role Scope Switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-cyan-400" />
                   <h3 className="font-bold text-white text-base">
-                    Client Escrow Orders ({filteredEscrows.length})
+                    {ledgerScope === "GLOBAL_LEDGER"
+                      ? "Global Network Escrow Ledger"
+                      : ledgerScope === "AS_CLIENT"
+                      ? "My Client Escrow Orders"
+                      : ledgerScope === "AS_CONTRACTOR"
+                      ? "My Assigned Contractor Milestones"
+                      : "My Escrow Orders"}{" "}
+                    ({filteredEscrows.length})
                   </h3>
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                    Client Ledger
+                    {ledgerScope === "GLOBAL_LEDGER" ? "Public Audit" : "Private Ledger"}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Track your deposited milestone escrows, inspect contractor deliverables, and disburse payouts on Base Sepolia.
+                  {account
+                    ? `Authenticated as ${account.slice(0, 6)}...${account.slice(-4)}. Showing strictly your authorized milestone escrows.`
+                    : "Connect Web3 wallet to manage your private client & contractor milestone escrows."}
                 </p>
               </div>
 
-              {/* Client Vault Security Status */}
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 shrink-0 shadow-sm">
-                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Client Vault Verified</span>
-              </div>
+              {/* View Scope Toggle: My Orders vs Global Network */}
+              {account ? (
+                <div className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-slate-950/80 border border-white/10 text-[10px] shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setLedgerScope("MY_ESCROWS")}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                      ledgerScope === "MY_ESCROWS"
+                        ? "bg-cyan-500 text-slate-950 shadow-md font-black"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    My Orders ({myTotalCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLedgerScope("AS_CLIENT")}
+                    className={`px-2 py-1 rounded-lg transition-all ${
+                      ledgerScope === "AS_CLIENT"
+                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Orders funded by your connected wallet"
+                  >
+                    As Client ({myClientCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLedgerScope("AS_CONTRACTOR")}
+                    className={`px-2 py-1 rounded-lg transition-all ${
+                      ledgerScope === "AS_CONTRACTOR"
+                        ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                    title="Milestones assigned to your contractor address"
+                  >
+                    As Contractor ({myContractorCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLedgerScope("GLOBAL_LEDGER")}
+                    className={`px-2 py-1 rounded-lg transition-all ${
+                      ledgerScope === "GLOBAL_LEDGER"
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                    title="View all network escrows on Base Sepolia"
+                  >
+                    <Globe className="w-3 h-3 inline mr-1" />
+                    All ({escrows.length})
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsConnectModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 hover:bg-cyan-900/60 transition-all cursor-pointer shadow-sm"
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>Connect Wallet</span>
+                </button>
+              )}
             </div>
 
-            {/* Filter Tabs */}
+            {/* Filter Tabs (Status) */}
             <div className="flex flex-wrap gap-1 bg-slate-950/80 p-1 rounded-xl border border-white/5 text-[10px] font-semibold">
               {(["ALL", "LOCKED", "SUBMITTED", "RELEASED"] as const).map((tab) => (
                 <button
@@ -1191,11 +1307,11 @@ export default function EscrowVaultSection() {
                   onClick={() => setActiveTab(tab)}
                   className={`px-2.5 py-1 rounded-lg transition-all ${
                     activeTab === tab
-                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  {tab === "ALL" && "All"}
+                  {tab === "ALL" && "All Statuses"}
                   {tab === "LOCKED" && "Locked"}
                   {tab === "SUBMITTED" && "In Review"}
                   {tab === "RELEASED" && "Released"}
@@ -1203,379 +1319,487 @@ export default function EscrowVaultSection() {
               ))}
             </div>
 
-            {/* Escrow Cards List */}
+            {/* Escrow Cards List with Empty State & Role Permissions */}
             <div className="space-y-4 min-w-0">
-              {filteredEscrows.map((esc, index) => {
-                const isLocked = esc.status === "LOCKED";
-                const isSubmitted = esc.status === "SUBMITTED";
-                const isReleased = esc.status === "RELEASED";
-                const targetId = esc.agreementId || esc.id;
-                const isReleasing = releasingId === targetId;
-
-                return (
-                  <div
-                    key={targetId ? `escrow-${targetId}` : `escrow-idx-${index}`}
-                    className="rounded-3xl bg-slate-900/80 border border-white/10 p-3.5 sm:p-6 hover:border-cyan-500/30 transition-all space-y-3.5 sm:space-y-4 shadow-xl backdrop-blur-xl min-w-0 overflow-hidden"
-                  >
-                    {/* Status & Amount Header with Timestamp */}
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      <div className="space-y-1.5 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {isLocked && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                              <Lock className="w-3 h-3 text-amber-400" /> Locked In Escrow
-                            </span>
-                          )}
-                          {isSubmitted && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-blue-400 animate-pulse" /> Work Submitted · In Review
-                            </span>
-                          )}
-                          {isReleased && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Milestone Payout Settled
-                            </span>
-                          )}
-
-                          {/* Order Creation Timestamp Badge */}
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono text-cyan-300 bg-cyan-950/70 border border-cyan-500/30 flex items-center gap-1 shadow-sm">
-                            <Clock className="w-3 h-3 text-cyan-400" />
-                            <span>{formatTimestamp(esc.createdAt)}</span>
-                          </span>
-
-                          <span className="text-xs font-mono font-black text-cyan-300 ml-auto sm:ml-0">
-                            {esc.amountEth} ETH Escrow
-                          </span>
-                        </div>
-
-                        <h4 className="text-sm sm:text-base font-bold text-white break-words">
-                          {esc.milestoneDesc}
-                        </h4>
-                      </div>
-
-                      {/* Header quick actions */}
+              {filteredEscrows.length === 0 ? (
+                <div className="text-center py-12 px-4 rounded-3xl bg-slate-900/60 border border-white/5 space-y-3">
+                  <Shield className="w-10 h-10 text-cyan-400/50 mx-auto" />
+                  <h4 className="text-base font-bold text-white">
+                    {account
+                      ? ledgerScope === "AS_CLIENT"
+                        ? "No Client Orders Found For Your Wallet"
+                        : ledgerScope === "AS_CONTRACTOR"
+                        ? "No Contractor Jobs Assigned To Your Wallet"
+                        : "No Milestone Orders Found For Your Wallet"
+                      : "Connect Wallet to View Your Escrow Orders"}
+                  </h4>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                    {account
+                      ? `Connected wallet (${account.slice(0, 6)}...${account.slice(-4)}) has no orders in this view. Lock a milestone on the left or switch to the Global Public Ledger.`
+                      : "LexiGuard protects milestone confidentiality. Connect your Web3 wallet to inspect your authorized agreements and release payments."}
+                  </p>
+                  <div className="flex items-center justify-center gap-2 pt-2">
+                    {ledgerScope !== "GLOBAL_LEDGER" && (
                       <button
-                        onClick={() => setViewingProposalEscrow(esc)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 hover:bg-cyan-900/60 transition-all shrink-0 cursor-pointer self-start"
-                        title="View Full Scope & Proposal in Modal"
+                        type="button"
+                        onClick={() => setLedgerScope("GLOBAL_LEDGER")}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 hover:bg-cyan-900/60 transition-all cursor-pointer"
                       >
-                        <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Scope Brief</span>
+                        <Globe className="w-3.5 h-3.5" />
+                        <span>View Global Network Ledger ({escrows.length})</span>
                       </button>
-                    </div>
+                    )}
+                    {!account && (
+                      <button
+                        type="button"
+                        onClick={() => setIsConnectModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300 transition-all cursor-pointer"
+                      >
+                        <Wallet className="w-3.5 h-3.5" />
+                        <span>Connect Web3 Wallet</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                filteredEscrows.map((esc, index) => {
+                  const isLocked = esc.status === "LOCKED";
+                  const isSubmitted = esc.status === "SUBMITTED";
+                  const isReleased = esc.status === "RELEASED";
+                  const targetId = esc.agreementId || esc.id;
+                  const isReleasing = releasingId === targetId;
 
-                    {/* 3-STEP MILESTONE WORKFLOW TRACKER */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-950/70 border border-white/5 text-[10px]">
-                      <div
-                        className={`p-1.5 rounded-lg text-center font-medium ${
-                          isLocked || isSubmitted || isReleased
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold"
-                            : "text-slate-500"
-                        }`}
-                      >
-                        <span>1. Funds Locked ✓</span>
-                      </div>
-                      <div
-                        className={`p-1.5 rounded-lg text-center font-medium ${
-                          isSubmitted || isReleased
-                            ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold"
-                            : isLocked
-                            ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse font-bold"
-                            : "text-slate-500"
-                        }`}
-                      >
-                        <span>2. Work Submission {isSubmitted || isReleased ? "✓" : "⚡"}</span>
-                      </div>
-                      <div
-                        className={`p-1.5 rounded-lg text-center font-medium ${
-                          isReleased
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold"
-                            : isSubmitted
-                            ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 animate-pulse font-bold"
-                            : "text-slate-500"
-                        }`}
-                      >
-                        <span>3. Review &amp; Release {isReleased ? "✓" : "🔒"}</span>
-                      </div>
-                    </div>
+                  const isCurrentClient = isClientOf(esc);
+                  const isCurrentContractor = isContractorOf(esc);
 
-                    {/* EXPANDABLE LEGAL SCOPE & ATTACHED SPECIFICATION PANEL */}
-                    <div className="rounded-2xl bg-slate-950/90 border border-cyan-500/25 p-3 sm:p-3.5 space-y-2.5 text-xs min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-cyan-300 font-bold text-[11px] min-w-0">
-                          <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                          <span className="truncate">Client Scope &amp; Requirements:</span>
+                  return (
+                    <div
+                      key={targetId ? `escrow-${targetId}` : `escrow-idx-${index}`}
+                      className="rounded-3xl bg-slate-900/80 border border-white/10 p-3.5 sm:p-6 hover:border-cyan-500/30 transition-all space-y-3.5 sm:space-y-4 shadow-xl backdrop-blur-xl min-w-0 overflow-hidden"
+                    >
+                      {/* Status & Amount Header with Timestamp & Role Badge */}
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isLocked && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                <Lock className="w-3 h-3 text-amber-400" /> Locked In Escrow
+                              </span>
+                            )}
+                            {isSubmitted && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-blue-400 animate-pulse" /> Work Submitted · In Review
+                              </span>
+                            )}
+                            {isReleased && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Milestone Payout Settled
+                              </span>
+                            )}
+
+                            {/* Role Badge: You are the Client OR You are the Contractor */}
+                            {isCurrentClient && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                                <User className="w-3 h-3 text-cyan-400" /> Your Order (Client)
+                              </span>
+                            )}
+                            {isCurrentContractor && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1">
+                                <Briefcase className="w-3 h-3 text-purple-400" /> Assigned to You (Contractor)
+                              </span>
+                            )}
+
+                            {/* Order Creation Timestamp Badge */}
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono text-cyan-300 bg-cyan-950/70 border border-cyan-500/30 flex items-center gap-1 shadow-sm">
+                              <Clock className="w-3 h-3 text-cyan-400" />
+                              <span>{formatTimestamp(esc.createdAt)}</span>
+                            </span>
+
+                            <span className="text-xs font-mono font-black text-cyan-300 ml-auto sm:ml-0">
+                              {esc.amountEth} ETH Escrow
+                            </span>
+                          </div>
+
+                          <h4 className="text-sm sm:text-base font-bold text-white break-words">
+                            {esc.milestoneDesc}
+                          </h4>
                         </div>
+
+                        {/* Header quick actions */}
                         <button
-                          type="button"
-                          onClick={() => toggleScope(targetId)}
-                          className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 cursor-pointer bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-500/20 transition-all shrink-0"
+                          onClick={() => setViewingProposalEscrow(esc)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 bg-cyan-950/60 border border-cyan-500/30 hover:bg-cyan-900/60 transition-all shrink-0 cursor-pointer self-start"
+                          title="View Full Scope & Proposal in Modal"
                         >
-                          {expandedScopeIds[targetId] ? (
-                            <>
-                              <span>Collapse</span>
-                              <ChevronUp className="w-3 h-3" />
-                            </>
-                          ) : (
-                            <>
-                              <span>Full Scope</span>
-                              <ChevronDown className="w-3 h-3" />
-                            </>
-                          )}
+                          <FileText className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Scope Brief</span>
                         </button>
                       </div>
 
-                      {/* Document Details & Hash with direct Notary verifier link */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-mono min-w-0">
-                        <div className="flex items-center gap-1.5 truncate max-w-full sm:max-w-xs min-w-0">
-                          <FileCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span className="text-white font-semibold truncate">
-                            {esc.proposalDocName || "LexiGuard_Scope_Of_Work_v1.pdf"}
-                          </span>
+                      {/* 3-STEP MILESTONE WORKFLOW TRACKER */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-950/70 border border-white/5 text-[10px]">
+                        <div
+                          className={`p-1.5 rounded-lg text-center font-medium ${
+                            isLocked || isSubmitted || isReleased
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          <span>1. Funds Locked ✓</span>
                         </div>
+                        <div
+                          className={`p-1.5 rounded-lg text-center font-medium ${
+                            isSubmitted || isReleased
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold"
+                              : isLocked
+                              ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse font-bold"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          <span>2. Work Submission {isSubmitted || isReleased ? "✓" : "⏳"}</span>
+                        </div>
+                        <div
+                          className={`p-1.5 rounded-lg text-center font-medium ${
+                            isReleased
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold"
+                              : isSubmitted
+                              ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 animate-pulse font-bold"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          <span>3. Review &amp; Release {isReleased ? "✓" : "🔒"}</span>
+                        </div>
+                      </div>
 
-                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {/* EXPANDABLE LEGAL SCOPE & ATTACHED SPECIFICATION PANEL */}
+                      <div className="rounded-2xl bg-slate-950/90 border border-cyan-500/25 p-3 sm:p-3.5 space-y-2.5 text-xs min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-cyan-300 font-bold text-[11px] min-w-0">
+                            <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                            <span className="truncate">Client Scope &amp; Requirements:</span>
+                          </div>
                           <button
-                            onClick={() => copyToClipboard(esc.proposalDocHash || esc.agreementId, `hash-${targetId}`)}
-                            className="text-slate-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
-                            title="Copy SHA-256 Digest"
+                            type="button"
+                            onClick={() => toggleScope(targetId)}
+                            className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 cursor-pointer bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-500/20 transition-all shrink-0"
                           >
-                            {copiedId === `hash-${targetId}` ? (
-                              <Check className="w-3 h-3 text-emerald-400" />
+                            {expandedScopeIds[targetId] ? (
+                              <>
+                                <span>Collapse</span>
+                                <ChevronUp className="w-3 h-3" />
+                              </>
                             ) : (
-                              <Copy className="w-3 h-3" />
+                              <>
+                                <span>Full Scope</span>
+                                <ChevronDown className="w-3 h-3" />
+                              </>
                             )}
-                            <span>Copy SHA-256</span>
                           </button>
+                        </div>
 
-                          <button
-                            onClick={() => {
-                              window.dispatchEvent(
-                                new CustomEvent("lexiguard_verify_hash", {
-                                  detail: { hash: esc.proposalDocHash || esc.agreementId },
-                                })
-                              );
-                              const el = document.getElementById("verifier-tool");
-                              if (el) el.scrollIntoView({ behavior: "smooth" });
-                            }}
-                            className="text-emerald-300 hover:text-emerald-200 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 transition-colors cursor-pointer"
-                            title="Verify cryptographic proof in Notary Verifier"
-                          >
-                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                            <span>Verify in Notary Tool ↑</span>
-                          </button>
+                        {/* Document Details & Hash with direct Notary verifier link */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-mono min-w-0">
+                          <div className="flex items-center gap-1.5 truncate max-w-full sm:max-w-xs min-w-0">
+                            <FileCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span className="text-white font-semibold truncate">
+                              {esc.proposalDocName || "LexiGuard_Scope_Of_Work_v1.pdf"}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => copyToClipboard(esc.proposalDocHash || esc.agreementId, `hash-${targetId}`)}
+                              className="text-slate-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+                              title="Copy SHA-256 Digest"
+                            >
+                              {copiedId === `hash-${targetId}` ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                              <span>Copy SHA-256</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                window.dispatchEvent(
+                                  new CustomEvent("lexiguard_verify_hash", {
+                                    detail: { hash: esc.proposalDocHash || esc.agreementId },
+                                  })
+                                );
+                                const el = document.getElementById("verifier-tool");
+                                if (el) el.scrollIntoView({ behavior: "smooth" });
+                              }}
+                              className="text-emerald-300 hover:text-emerald-200 font-bold bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Verify cryptographic proof in Notary Verifier"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Verify in Notary Tool ↑</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Acceptance Checklist Details */}
+                        <div className="text-[11px] text-slate-300 leading-relaxed bg-slate-900/70 p-2.5 rounded-xl border border-white/5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                            Acceptance Criteria &amp; Deliverables Checklist:
+                          </span>
+                          <p className={`whitespace-pre-line ${expandedScopeIds[targetId] ? "" : "line-clamp-2"}`}>
+                            {esc.proposalRequirements ||
+                              "1. Comprehensive smart contract clause verification under BLI standards.\n2. Automated zero-knowledge cryptographic anchoring on Base Sepolia.\n3. Complete unit test coverage and verification certificate."}
+                          </p>
                         </div>
                       </div>
 
-                      {/* Acceptance Checklist Details */}
-                      <div className="text-[11px] text-slate-300 leading-relaxed bg-slate-900/70 p-2.5 rounded-xl border border-white/5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                          Acceptance Criteria &amp; Deliverables Checklist:
-                        </span>
-                        <p className={`whitespace-pre-line ${expandedScopeIds[targetId] ? "" : "line-clamp-2"}`}>
-                          {esc.proposalRequirements ||
-                            "1. Comprehensive smart contract clause verification under BLI standards.\n2. Automated zero-knowledge cryptographic anchoring on Base Sepolia.\n3. Complete unit test coverage and verification certificate."}
-                        </p>
-                      </div>
-                    </div>
+                      {/* CONTRACTOR WORK SUBMISSION DETAILS */}
+                      {(esc.deliverableUrl || esc.submissionNotes) && (
+                        <div className="p-3.5 rounded-2xl bg-slate-950/90 border border-purple-500/30 space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-purple-300">
+                            <span className="flex items-center gap-1.5">
+                              <FileCheck className="w-3.5 h-3.5 text-purple-400" />
+                              <span>Contractor Deliverable Submission:</span>
+                            </span>
+                            {esc.deliverableUrl && (
+                              <a
+                                href={esc.deliverableUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-emerald-400 hover:underline font-mono"
+                              >
+                                <span>View Deliverable Link</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                          {esc.submissionNotes && (
+                            <p className="text-[11px] text-slate-200 italic bg-black/30 p-2 rounded-xl">
+                              &quot;{esc.submissionNotes}&quot;
+                            </p>
+                          )}
+                        </div>
+                      )}
 
-                    {/* CONTRACTOR WORK SUBMISSION DETAILS */}
-                    {(esc.deliverableUrl || esc.submissionNotes) && (
-                      <div className="p-3.5 rounded-2xl bg-slate-950/90 border border-purple-500/30 space-y-1.5 text-xs">
-                        <div className="flex items-center justify-between text-[11px] font-bold text-purple-300">
-                          <span className="flex items-center gap-1.5">
-                            <FileCheck className="w-3.5 h-3.5 text-purple-400" />
-                            <span>Contractor Deliverable Submission:</span>
+                      {/* CLIENT VERIFIED REVIEW IF RELEASED */}
+                      {esc.review && (
+                        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1 text-xs">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-amber-300">
+                            <span className="flex items-center gap-1.5">
+                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                              <span>Client Verified Review ({esc.review.rating}/5 Stars)</span>
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">100% On-Chain Escrow</span>
+                          </div>
+                          <p className="text-[11px] text-slate-200 italic">
+                            &quot;{esc.review.comment}&quot;
+                          </p>
+                        </div>
+                      )}
+
+                      {/* CLIENT & CONTRACTOR WALLET BINDINGS */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-slate-400 pt-2 border-t border-white/5">
+                        <div>
+                          <span className="text-slate-500">Client: </span>
+                          <span className={isCurrentClient ? "text-cyan-300 font-bold" : ""}>
+                            {esc.client ? `${esc.client.slice(0, 6)}...${esc.client.slice(-4)}` : "InnoXpert Client"}
+                            {isCurrentClient ? " (You)" : ""}
                           </span>
-                          {esc.deliverableUrl && (
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Contractor: </span>
+                          <span className={isCurrentContractor ? "text-purple-300 font-bold" : "text-cyan-300 font-semibold"}>
+                            {esc.contractorName ? `${esc.contractorName} (` : ""}
+                            {esc.contractor ? `${esc.contractor.slice(0, 6)}...${esc.contractor.slice(-4)}` : "Verified"}
+                            {esc.contractorName ? ")" : ""}
+                            {isCurrentContractor ? " (You)" : ""}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* TRANSACTION HASHES & REFERENCES */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-slate-500 pt-1 border-t border-white/5 min-w-0">
+                        <div className="flex items-center gap-2 truncate max-w-full sm:max-w-xs min-w-0">
+                          <span className="truncate">Ref: {targetId}</span>
+                          <button
+                            onClick={() => copyToClipboard(targetId, targetId)}
+                            className="hover:text-cyan-400 transition-colors cursor-pointer"
+                            title="Copy Agreement ID"
+                          >
+                            {copiedId === targetId ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          {esc.txHash && (
                             <a
-                              href={esc.deliverableUrl}
+                              href={`${explorerBase}/tx/${esc.txHash}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-emerald-400 hover:underline font-mono"
+                              className="inline-flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 underline font-mono"
                             >
-                              <span>View Deliverable Link</span>
-                              <ExternalLink className="w-3 h-3" />
+                              <span>Lock Tx</span>
+                              <ArrowUpRight className="w-3 h-3" />
                             </a>
                           )}
-                        </div>
-                        {esc.submissionNotes && (
-                          <p className="text-[11px] text-slate-200 italic bg-black/30 p-2 rounded-xl">
-                            &quot;{esc.submissionNotes}&quot;
-                          </p>
-                        )}
-                      </div>
-                    )}
 
-                    {/* CLIENT VERIFIED REVIEW IF RELEASED */}
-                    {esc.review && (
-                      <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1 text-xs">
-                        <div className="flex items-center justify-between text-[11px] font-bold text-amber-300">
-                          <span className="flex items-center gap-1.5">
-                            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                            <span>Client Verified Review ({esc.review.rating}/5 Stars)</span>
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono">100% On-Chain Escrow</span>
-                        </div>
-                        <p className="text-[11px] text-slate-200 italic">
-                          &quot;{esc.review.comment}&quot;
-                        </p>
-                      </div>
-                    )}
-
-                    {/* CLIENT & CONTRACTOR WALLET BINDINGS */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-slate-400 pt-2 border-t border-white/5">
-                      <div>
-                        <span className="text-slate-500">Client: </span>
-                        <span>
-                          {esc.client ? `${esc.client.slice(0, 6)}...${esc.client.slice(-4)}` : "InnoXpert Client"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Contractor: </span>
-                        <span className="text-cyan-300 font-semibold">
-                          {esc.contractorName ? `${esc.contractorName} (` : ""}
-                          {esc.contractor ? `${esc.contractor.slice(0, 6)}...${esc.contractor.slice(-4)}` : "Verified"}
-                          {esc.contractorName ? ")" : ""}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* TRANSACTION HASHES & REFERENCES */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-mono text-slate-500 pt-1 border-t border-white/5 min-w-0">
-                      <div className="flex items-center gap-2 truncate max-w-full sm:max-w-xs min-w-0">
-                        <span className="truncate">Ref: {targetId}</span>
-                        <button
-                          onClick={() => copyToClipboard(targetId, targetId)}
-                          className="hover:text-cyan-400 transition-colors cursor-pointer"
-                          title="Copy Agreement ID"
-                        >
-                          {copiedId === targetId ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3">
-                        {esc.txHash && (
-                          <a
-                            href={`${explorerBase}/tx/${esc.txHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 underline font-mono"
-                          >
-                            <span>Lock Tx</span>
-                            <ArrowUpRight className="w-3 h-3" />
-                          </a>
-                        )}
-
-                        {esc.releaseTxHash && (
-                          <a
-                            href={`${explorerBase}/tx/${esc.releaseTxHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline font-mono"
-                          >
-                            <span>Release Payout Tx</span>
-                            <ArrowUpRight className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* CLIENT PERSPECTIVE: CURRENT STAGE STATUS & ACTIONS */}
-                    {isLocked && (
-                      <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-white/5 bg-slate-950/60 p-3 rounded-2xl">
-                        <div className="flex items-center gap-2 text-xs text-amber-300">
-                          <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
-                          <span className="text-[11px]">
-                            Milestone funds securely escrowed in smart contract. Assigned contractor ({esc.contractorName || "Contractor"}) is executing your scope.
-                          </span>
-                        </div>
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 shrink-0">
-                          <Zap className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Work In Progress</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {isSubmitted && (
-                      <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-white/5 bg-cyan-950/30 border border-cyan-500/30 p-3 rounded-2xl">
-                        <div>
-                          <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-                            <FileCheck className="w-4 h-4 text-cyan-400" />
-                            <span>Deliverables Submitted for Client Review</span>
-                          </span>
-                          <p className="text-[11px] text-slate-300 mt-0.5">
-                            Verify cryptographic proof in Notary above before releasing live on-chain payout.
-                          </p>
-                        </div>
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                          <button
-                            onClick={() => {
-                              window.dispatchEvent(
-                                new CustomEvent("lexiguard_verify_hash", {
-                                  detail: { hash: esc.proposalDocHash || esc.agreementId },
-                                })
-                              );
-                              const el = document.getElementById("verifier-tool");
-                              if (el) el.scrollIntoView({ behavior: "smooth" });
-                            }}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/25 transition-all cursor-pointer text-center"
-                            title="Verify document and agreement integrity in Instant Notary Verifier"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                            <span>Verify Proof ↑</span>
-                          </button>
-                          <button
-                            onClick={() => handleRelease(esc)}
-                            disabled={isReleasing}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/30 transition-all cursor-pointer disabled:opacity-50 text-center"
-                          >
-                            <Unlock className={`w-3.5 h-3.5 ${isReleasing ? "animate-spin" : ""}`} />
-                            <span>{isReleasing ? "Releasing Payout..." : `Approve & Release ${esc.amountEth} ETH`}</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {isReleased && (
-                      <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-white/5">
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-emerald-400 font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Payout Settled on Base Sepolia
-                          </span>
                           {esc.releaseTxHash && (
                             <a
                               href={`${explorerBase}/tx/${esc.releaseTxHash}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[10px] text-cyan-300 underline font-mono hover:text-cyan-200"
+                              className="inline-flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold underline font-mono"
                             >
-                              View Settlement Tx ↗
+                              <span>Release Payout Tx</span>
+                              <ArrowUpRight className="w-3 h-3" />
                             </a>
                           )}
                         </div>
-                        {!esc.review && (
-                          <button
-                            onClick={() => {
-                              setReviewingEscrow(esc);
-                              setReviewRating(5);
-                              setReviewComment("Excellent work! Smart legal contracts delivered on Base with high quality.");
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-all shadow-sm cursor-pointer"
-                          >
-                            <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                            <span>Leave Contractor Review (5★)</span>
-                          </button>
-                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {/* STRICT ROLE ACTIONS & WORKFLOW TRANSITIONS */}
+                      {isLocked && (
+                        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-white/5 bg-slate-950/60 p-3 rounded-2xl">
+                          <div className="flex items-center gap-2 text-xs text-amber-300">
+                            <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                            <span className="text-[11px]">
+                              {isCurrentContractor
+                                ? "You are the assigned contractor. Execute milestone requirements and upload deliverables when ready."
+                                : isCurrentClient
+                                ? `Milestone funds securely escrowed in smart contract. Assigned contractor (${esc.contractorName || "Contractor"}) is executing your scope.`
+                                : `Funds locked in escrow. Assigned contractor (${esc.contractorName || "Contractor"}) is executing scope.`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* ONLY ASSIGNED CONTRACTOR CAN SUBMIT DELIVERABLES */}
+                            {isCurrentContractor ? (
+                              <button
+                                type="button"
+                                onClick={() => openSubmitModal(esc)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 border border-purple-500/40 shadow-lg shadow-purple-500/20 transition-all cursor-pointer"
+                                title="Contractor submits completed milestone deliverables"
+                              >
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>Submit Deliverable ↗</span>
+                              </button>
+                            ) : (
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20">
+                                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{isCurrentClient ? "Awaiting Contractor Submission" : "Work In Progress"}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {isSubmitted && (
+                        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-white/5 bg-cyan-950/30 border border-cyan-500/30 p-3 rounded-2xl">
+                          <div>
+                            <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                              <FileCheck className="w-4 h-4 text-cyan-400" />
+                              <span>
+                                {isCurrentClient
+                                  ? "Deliverables Submitted for Your Approval"
+                                  : isCurrentContractor
+                                  ? "Deliverable Submitted · Awaiting Client Payout"
+                                  : "Deliverables Submitted for Client Review"}
+                              </span>
+                            </span>
+                            <p className="text-[11px] text-slate-300 mt-0.5">
+                              {isCurrentClient
+                                ? "Verify cryptographic proof in Notary above before releasing live on-chain payout to contractor."
+                                : isCurrentContractor
+                                ? `Your deliverable is submitted. Client (${esc.client ? esc.client.slice(0, 6) + "..." + esc.client.slice(-4) : "Client"}) must verify proof and authorize payout release.`
+                                : `Milestone completed. Only the client (${esc.client ? esc.client.slice(0, 6) + "..." + esc.client.slice(-4) : "Client"}) can authorize payout release.`}
+                            </p>
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                            <button
+                              onClick={() => {
+                                window.dispatchEvent(
+                                  new CustomEvent("lexiguard_verify_hash", {
+                                    detail: { hash: esc.proposalDocHash || esc.agreementId },
+                                  })
+                                );
+                                const el = document.getElementById("verifier-tool");
+                                if (el) el.scrollIntoView({ behavior: "smooth" });
+                              }}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/25 transition-all cursor-pointer text-center"
+                              title="Verify document and agreement integrity in Instant Notary Verifier"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Verify Proof ↑</span>
+                            </button>
+
+                            {/* STRICT SECURITY: ONLY CLIENT WHO DEPOSITED CAN RELEASE PAYOUT */}
+                            {isCurrentClient ? (
+                              <button
+                                onClick={() => handleRelease(esc)}
+                                disabled={isReleasing}
+                                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/30 transition-all cursor-pointer disabled:opacity-50 text-center font-bold"
+                              >
+                                <Unlock className={`w-3.5 h-3.5 ${isReleasing ? "animate-spin" : ""}`} />
+                                <span>{isReleasing ? "Releasing Payout..." : `Approve & Release ${esc.amountEth} ETH`}</span>
+                              </button>
+                            ) : isCurrentContractor ? (
+                              <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900/90 text-amber-300 border border-amber-500/30 text-center">
+                                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Awaiting Client Payout</span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900/60 text-slate-400 border border-white/10 text-center">
+                                <Shield className="w-3.5 h-3.5 text-slate-500" />
+                                <span>Client Authorized Only</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {isReleased && (
+                        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-white/5">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-emerald-400 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Payout Settled on Base Sepolia
+                            </span>
+                            {esc.releaseTxHash && (
+                              <a
+                                href={`${explorerBase}/tx/${esc.releaseTxHash}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-cyan-300 underline font-mono hover:text-cyan-200"
+                              >
+                                View Settlement Tx ↗
+                              </a>
+                            )}
+                          </div>
+                          {/* ONLY CLIENT CAN LEAVE REVIEW */}
+                          {isCurrentClient && !esc.review && (
+                            <button
+                              onClick={() => {
+                                setReviewingEscrow(esc);
+                                setReviewRating(5);
+                                setReviewComment("Exceptional work! Smart legal contracts delivered on Base with high quality.");
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 transition-all shadow-sm cursor-pointer"
+                            >
+                              <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                              <span>Leave Contractor Review (5★)</span>
+                            </button>
+                          )}
+                          {isCurrentContractor && (
+                            <div className="text-[11px] font-mono text-emerald-300 bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                              ✓ Received {(parseFloat(esc.amountEth || "0") * 0.99).toFixed(5)} ETH Net Payout
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

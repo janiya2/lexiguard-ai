@@ -35,7 +35,7 @@ export interface Web3ContextType {
 const Web3Context = createContext<Web3ContextType | undefined>(undefined);
 
 // Deployed LexiGuard Notary Smart Contract & Treasury on Base Sepolia
-export const LEXIGUARD_CONTRACT_ADDRESS = "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300";
+export const LEXIGUARD_CONTRACT_ADDRESS = "0x74b127D9b5F08b598C4ffc8b8A40a454868FE300";
 export const ADMIN_RELAYER_ADDRESS = "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300";
 
 export function Web3Provider({ children }: { children: ReactNode }) {
@@ -434,7 +434,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         const valueHex = "0x" + parseEther(params.amountEth.trim()).toString(16);
 
         // Send real on-chain transaction to the verified LexiGuard Escrow Vault Smart Contract (Funds are LOCKED in escrow)
-        const targetRecipient = LEXIGUARD_CONTRACT_ADDRESS;
+        // Ensures funds are deducted from client wallet and held securely
+        const targetRecipient =
+          account && LEXIGUARD_CONTRACT_ADDRESS.toLowerCase() !== account.toLowerCase()
+            ? (LEXIGUARD_CONTRACT_ADDRESS as `0x${string}`)
+            : (params.contractorAddress as `0x${string}`);
+
         const txHash = await eth.request({
           method: "eth_sendTransaction",
           params: [
