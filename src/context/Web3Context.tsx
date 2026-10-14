@@ -433,8 +433,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         // Convert ETH amount to Wei in Hex using viem parseEther
         const valueHex = "0x" + parseEther(params.amountEth.trim()).toString(16);
 
-        // Send real on-chain transaction to the verified contractor recipient
-        const targetRecipient = params.contractorAddress || LEXIGUARD_CONTRACT_ADDRESS;
+        // Send real on-chain transaction to the verified LexiGuard Escrow Vault Smart Contract (Funds are LOCKED in escrow)
+        const targetRecipient = LEXIGUARD_CONTRACT_ADDRESS;
         const txHash = await eth.request({
           method: "eth_sendTransaction",
           params: [

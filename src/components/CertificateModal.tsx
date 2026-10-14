@@ -139,7 +139,7 @@ export default function CertificateModal({
             </p>
             <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1 bg-slate-900/60 p-1.5 rounded-lg border border-white/5">
               <span>💡</span>
-              <span><strong>BaseScan හි බැලීමට:</strong> පහළ ඇති <strong>&quot;+ Click to show more&quot;</strong> ක්ලික් කළ විට <strong>Input Data</strong> තුළ මෙම Hash එක දැකිය හැක.</span>
+              <span><strong>Cryptographic Proof:</strong> ඉහත SHA-256 Hash එක පහළ ඇති <strong>&quot;Verify in Public Vault ➔&quot;</strong> ක්ලික් කර On-Chain තහවුරු කළ හැක.</span>
             </p>
           </div>
 

@@ -46,18 +46,22 @@ export async function POST(req: Request) {
         ? (agreementId as Hex)
         : ("0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")) as Hex;
 
-      // Broadcast live transaction on Base Sepolia settling the payout release
+      const totalEth = parseFloat(amountEth || "0.00010");
+      const contractorEth = (totalEth * 0.99).toFixed(6);
+      const protocolEth = (totalEth * 0.01).toFixed(6);
+
+      // Broadcast live transaction on Base Sepolia settling the 99% payout release
       let txHash: `0x${string}`;
       try {
         txHash = await walletClient.sendTransaction({
           to: recipient,
           data: agreementHashHex,
-          value: BigInt(0),
+          value: parseEther(contractorEth),
         });
       } catch (sendErr: any) {
-        console.warn("Direct contractor send reverted, settling via Notary Anchor:", sendErr?.message);
+        console.warn("Direct value payout fallback to zero-value calldata proof:", sendErr?.message);
         txHash = await walletClient.sendTransaction({
-          to: NOTARY_BURN_ANCHOR,
+          to: recipient,
           data: agreementHashHex,
           value: BigInt(0),
         });
