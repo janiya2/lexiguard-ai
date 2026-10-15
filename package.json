@@ -1,7 +1,8 @@
 {
   "name": "lexiguard-ai",
   "version": "1.0.0",
-  "private": true,
+  "license": "Apache-2.0",
+  "private": false,
   "scripts": {
     "dev": "next dev",
     "build": "next build",

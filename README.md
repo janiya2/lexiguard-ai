@@ -1,5 +1,9 @@
 # 🛡️ LexiGuard AI — On-Chain Legal Intelligence & Automated Compliance Vault
 
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Next.js](https://img.shields.io/badge/Next.js-15.1.7-black)](https://nextjs.org/)
+[![Base Sepolia](https://img.shields.io/badge/Network-Base_Sepolia-0052FF)](https://sepolia.basescan.org)
+
 > **Official DoraHacks Submission for BLI Legal Tech Hackathon 2**  
 > **Organized by:** Blockchain Legal Institute (BLI) & Cogent Law Group  
 > **Built by:** InnoXpert Studio (Janitha Dilshan — Lead Solutions Architect)  
@@ -137,3 +141,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## 🏆 Hackathon Credits & Disclaimer
 Developed by **Janitha Dilshan** (Founder & Lead Architect, InnoXpert Studio) for the **BLI Legal Tech Hackathon 2**.
 LexiGuard AI is an automated compliance intelligence tool and does not constitute formal legal counsel. Always consult certified legal practitioners for binding jurisprudence.
+
+---
+
+## 📄 License
+
+This project is open-source and licensed under the **Apache License 2.0** — see the [LICENSE](LICENSE) file for details.  
+Copyright © 2026 Janitha Dilshan (InnoXpert Studio). All rights reserved.
