@@ -53,9 +53,13 @@ import {
   saveSiteSettings,
   getNotarizedContracts,
   getContractorProfiles,
+  saveContractorProfile,
   getCreditPurchases,
   CreditPurchase,
   ContractorProfile,
+  PricingTier,
+  MilestoneTierConfig,
+  DEFAULT_MILESTONE_TIERS,
   DEFAULT_CONTRACTORS,
   SiteSettings,
   DEFAULT_SITE_SETTINGS,
@@ -107,6 +111,17 @@ export default function AdminPage() {
   const [contracts, setContracts] = useState<any[]>([]);
   const [contractorsList, setContractorsList] = useState<ContractorProfile[]>(DEFAULT_CONTRACTORS);
   const [creditPurchases, setCreditPurchases] = useState<CreditPurchase[]>([]);
+
+  // Contractor & Milestone Rates Management Studio State
+  const [contractorSubTab, setContractorSubTab] = useState<"tiers" | "milestones" | "directory" | "bulk">("tiers");
+  const [selectedContractorWallet, setSelectedContractorWallet] = useState<string>(
+    DEFAULT_CONTRACTORS[0]?.walletAddress || ""
+  );
+  const [editingContractor, setEditingContractor] = useState<ContractorProfile | null>(null);
+  const [isSavingContractor, setIsSavingContractor] = useState(false);
+  const [contractorSaveSuccess, setContractorSaveSuccess] = useState(false);
+  const [isSavingMilestones, setIsSavingMilestones] = useState(false);
+  const [milestonesSaveSuccess, setMilestonesSaveSuccess] = useState(false);
 
   // Web3 Relayer Engine State
   const [relayerStatus, setRelayerStatus] = useState<{
@@ -236,6 +251,136 @@ export default function AdminPage() {
   const handleLogout = () => {
     logoutAdmin();
     setActiveAdmin(null);
+  };
+
+  // Auto-sync editing contractor profile when selected or list updates
+  useEffect(() => {
+    if (contractorsList.length > 0) {
+      const found = contractorsList.find(
+        (c) => c.walletAddress.toLowerCase() === selectedContractorWallet.toLowerCase()
+      ) || contractorsList[0];
+
+      if (found) {
+        const baseHourly = found.hourlyRateEth || "0.00010";
+        const existingTiers = found.pricingTiers || [];
+        const t1: PricingTier = existingTiers.find((t) => t.tierId === "level_1") || {
+          tierId: "level_1",
+          title: "Level 1: Express AI Clause Audit",
+          priceEth: baseHourly,
+          turnaround: "24 Hours",
+          scopeSummary: "Rapid smart contract clause review, vulnerability identification, and compliance verification report.",
+        };
+        const t2: PricingTier = existingTiers.find((t) => t.tierId === "level_2") || {
+          tierId: "level_2",
+          title: "Level 2: Comprehensive Architecture & Security",
+          priceEth: (parseFloat(baseHourly) * 2.5).toFixed(5),
+          turnaround: "3 Days",
+          scopeSummary: "Full-stack EVM architecture review, escrow state machine verification, and custom legal contract synthesizer.",
+        };
+        const t3: PricingTier = existingTiers.find((t) => t.tierId === "level_3") || {
+          tierId: "level_3",
+          title: "Level 3: Full Protocol & ZK Settlement Seal",
+          priceEth: (parseFloat(baseHourly) * 5).toFixed(5),
+          turnaround: "7 Days",
+          scopeSummary: "End-to-end zero-knowledge verifier integration, formal mathematical proofs, and notarized on-chain certification.",
+        };
+
+        setEditingContractor({
+          ...found,
+          hourlyRateEth: baseHourly,
+          pricingTiers: [t1, t2, t3],
+        });
+      }
+    }
+  }, [selectedContractorWallet, contractorsList]);
+
+  const handleSaveContractorRates = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingContractor) return;
+    setIsSavingContractor(true);
+    setContractorSaveSuccess(false);
+
+    try {
+      const ok = await saveContractorProfile(editingContractor);
+      if (ok) {
+        setContractorSaveSuccess(true);
+        // Refresh local list
+        const updatedList = contractorsList.map((c) =>
+          c.walletAddress.toLowerCase() === editingContractor.walletAddress.toLowerCase()
+            ? editingContractor
+            : c
+        );
+        setContractorsList(updatedList);
+        setTimeout(() => setContractorSaveSuccess(false), 3500);
+      }
+    } catch (err) {
+      console.error("Error saving contractor rates:", err);
+    } finally {
+      setIsSavingContractor(false);
+    }
+  };
+
+  const handleSaveMilestonesConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingMilestones(true);
+    setMilestonesSaveSuccess(false);
+
+    try {
+      const ok = await saveSiteSettings({
+        milestoneTiers: settings.milestoneTiers,
+        defaultMilestoneBaseRateEth: settings.defaultMilestoneBaseRateEth,
+      });
+      if (ok) {
+        setMilestonesSaveSuccess(true);
+        setTimeout(() => setMilestonesSaveSuccess(false), 3500);
+      }
+    } catch (err) {
+      console.error("Error saving milestone settings:", err);
+    } finally {
+      setIsSavingMilestones(false);
+    }
+  };
+
+  const handleBulkRateAdjustment = async (percentChange: number) => {
+    const isIncrease = percentChange > 0;
+    if (!confirm(`Apply ${isIncrease ? "+" : ""}${percentChange}% calibration to all verified contractors' milestone rates?`)) return;
+    setIsSavingContractor(true);
+    try {
+      const factor = 1 + percentChange / 100;
+      const updatedAll = await Promise.all(
+        contractorsList.map(async (c) => {
+          const newHourly = (parseFloat(c.hourlyRateEth || "0.00010") * factor).toFixed(5);
+          const updatedTiers = (c.pricingTiers || []).map((t) => ({
+            ...t,
+            priceEth: (parseFloat(t.priceEth) * factor).toFixed(5),
+          }));
+          const updated: ContractorProfile = {
+            ...c,
+            hourlyRateEth: newHourly,
+            pricingTiers: updatedTiers,
+          };
+          await saveContractorProfile(updated);
+          return updated;
+        })
+      );
+      setContractorsList(updatedAll);
+      setContractorSaveSuccess(true);
+      setTimeout(() => setContractorSaveSuccess(false), 3500);
+    } catch (err) {
+      console.error("Bulk rate error:", err);
+    } finally {
+      setIsSavingContractor(false);
+    }
+  };
+
+  const handleResetContractorToDefaults = () => {
+    if (!editingContractor) return;
+    const def = DEFAULT_CONTRACTORS.find(
+      (d) => d.walletAddress.toLowerCase() === editingContractor.walletAddress.toLowerCase()
+    );
+    if (def) {
+      setEditingContractor({ ...def });
+    }
   };
 
   const handleSave = async (e?: React.FormEvent) => {
@@ -624,7 +769,7 @@ export default function AdminPage() {
               >
                 <div className="flex items-center gap-2.5">
                   <UserCheck className="w-4 h-4" />
-                  <span>Contractors</span>
+                  <span>Milestones & Rates</span>
                 </div>
                 <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-black/30">
                   {contractorsList.length}
@@ -6411,49 +6556,902 @@ export default function AdminPage() {
               </form>
             )}
 
-            {/* TAB 4: CONTRACTORS */}
+            {/* TAB 4: CONTRACTORS & MILESTONE RATES STUDIO */}
             {activeTab === "contractors" && (
-              <div className="p-6 rounded-3xl bg-slate-900/70 border border-white/10 space-y-4 backdrop-blur-xl shadow-xl animate-in fade-in">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-base text-white">Verified Contractor Directory</h3>
-                    <p className="text-xs text-slate-400">Legal tech specialists and smart contract developers available for escrow hiring</p>
+              <div className="space-y-6 animate-in fade-in">
+                {/* STUDIO HEADER */}
+                <div className="p-6 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                          ⚡ Admin Rate Controller
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Base Sepolia Sync
+                        </span>
+                      </div>
+                      <h2 className="text-xl md:text-2xl font-black text-white">
+                        Contractor Milestone Rates &amp; Escrow Studio
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+                        Manage Contractor Service Levels (Level 1 Express, Level 2 Standard, Level 3 Enterprise rates), delivery turnarounds, deliverable scopes, and global Escrow Vault multipliers (1–4 Milestones).
+                      </p>
+                    </div>
+
+                    {/* Sub-Tab Navigation */}
+                    <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-slate-950/80 border border-white/10 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setContractorSubTab("tiers")}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          contractorSubTab === "tiers"
+                            ? "bg-cyan-500 text-black shadow-lg shadow-cyan-500/20"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Contractor Rates (L1/L2/L3)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setContractorSubTab("milestones")}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          contractorSubTab === "milestones"
+                            ? "bg-purple-500 text-white shadow-lg shadow-purple-500/20"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Vault Multipliers (1-4)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setContractorSubTab("directory")}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          contractorSubTab === "directory"
+                            ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Directory ({contractorsList.length})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setContractorSubTab("bulk")}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          contractorSubTab === "bulk"
+                            ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                        <span>Bulk Calibrator</span>
+                      </button>
+                    </div>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-slate-800 text-xs font-semibold text-slate-300">
-                    {contractorsList.length} Active Profiles
-                  </span>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 overflow-hidden">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/80 text-slate-400 font-semibold border-b border-white/10">
-                      <tr>
-                        <th className="py-3 px-4">Contractor</th>
-                        <th className="py-3 px-4">Role & Studio</th>
-                        <th className="py-3 px-4">Payout Address</th>
-                        <th className="py-3 px-4">Rate (ETH)</th>
-                        <th className="py-3 px-4">Trust Score</th>
-                        <th className="py-3 px-4 text-right">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {contractorsList.map((c) => (
-                        <tr key={c.walletAddress} className="hover:bg-white/[0.02]">
-                          <td className="py-3 px-4 font-bold text-white">{c.fullName}</td>
-                          <td className="py-3 px-4 text-slate-300">{c.roleTitle}</td>
-                          <td className="py-3 px-4 font-mono text-cyan-300">{c.walletAddress.slice(0, 6)}...{c.walletAddress.slice(-4)}</td>
-                          <td className="py-3 px-4 font-mono text-amber-300">{c.hourlyRateEth} ETH</td>
-                          <td className="py-3 px-4 text-emerald-400 font-bold">{c.reputationScore}%</td>
-                          <td className="py-3 px-4 text-right">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Verified
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {/* SUBTAB 1: CONTRACTOR SERVICE PACKAGES & RATES */}
+                {contractorSubTab === "tiers" && (
+                  <div className="space-y-6">
+                    {/* Contractor Selection Strip */}
+                    <div className="p-5 rounded-3xl bg-slate-900/70 border border-white/10 space-y-3 backdrop-blur-xl">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                            <span>Select Contractor to Configure Milestone Rates</span>
+                          </h3>
+                          <p className="text-[11px] text-slate-400">Click any contractor below to customize their Level 1, 2, and 3 milestone pricing packages</p>
+                        </div>
+                        <span className="text-[11px] font-mono text-cyan-400 font-bold">
+                          {contractorsList.length} Active Contractors
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {contractorsList.map((c) => {
+                          const isSelected =
+                            selectedContractorWallet.toLowerCase() === c.walletAddress.toLowerCase();
+                          const l1 = c.pricingTiers?.find((t) => t.tierId === "level_1")?.priceEth || c.hourlyRateEth;
+                          const l2 = c.pricingTiers?.find((t) => t.tierId === "level_2")?.priceEth || (parseFloat(l1) * 2.5).toFixed(5);
+                          const l3 = c.pricingTiers?.find((t) => t.tierId === "level_3")?.priceEth || (parseFloat(l1) * 5).toFixed(5);
+
+                          return (
+                            <button
+                              type="button"
+                              key={c.walletAddress}
+                              onClick={() => setSelectedContractorWallet(c.walletAddress)}
+                              className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden group ${
+                                isSelected
+                                  ? "bg-cyan-500/15 border-cyan-500 shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-500/50"
+                                  : "bg-slate-950/70 border-white/5 hover:border-white/20 hover:bg-slate-950"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between mb-1.5">
+                                <div className="font-bold text-xs text-white group-hover:text-cyan-300 transition-colors">
+                                  {c.fullName}
+                                </div>
+                                {isSelected ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-500 text-black">
+                                    ACTIVE
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-mono text-slate-500">
+                                    {c.walletAddress.slice(0, 4)}...{c.walletAddress.slice(-3)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate mb-2.5">
+                                {c.roleTitle}
+                              </div>
+                              <div className="grid grid-cols-3 gap-1 text-[9px] font-mono text-center pt-2 border-t border-white/5">
+                                <div className="p-1 rounded bg-black/40">
+                                  <div className="text-slate-500">L1</div>
+                                  <div className="text-cyan-400 font-bold truncate">{l1}</div>
+                                </div>
+                                <div className="p-1 rounded bg-black/40">
+                                  <div className="text-slate-500">L2</div>
+                                  <div className="text-purple-400 font-bold truncate">{l2}</div>
+                                </div>
+                                <div className="p-1 rounded bg-black/40">
+                                  <div className="text-slate-500">L3</div>
+                                  <div className="text-emerald-400 font-bold truncate">{l3}</div>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Active Contractor Milestone Rates Form */}
+                    {editingContractor && (
+                      <form onSubmit={handleSaveContractorRates} className="space-y-5">
+                        <div className="p-6 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-xl space-y-6">
+                          {/* Contractor Meta Row */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/10">
+                            <div>
+                              <div className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-1">
+                                Currently Editing Milestone Rates For:
+                              </div>
+                              <div className="flex items-center gap-2.5">
+                                <h3 className="text-lg font-black text-white">
+                                  {editingContractor.fullName}
+                                </h3>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  {editingContractor.companyName || "Verified Studio"}
+                                </span>
+                              </div>
+                              <div className="text-xs text-cyan-300 font-mono mt-0.5">
+                                Payout Address: {editingContractor.walletAddress}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <div>
+                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                  Base Hourly Rate (ETH)
+                                </label>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={editingContractor.hourlyRateEth}
+                                    onChange={(e) =>
+                                      setEditingContractor({
+                                        ...editingContractor,
+                                        hourlyRateEth: e.target.value,
+                                      })
+                                    }
+                                    className="w-28 rounded-xl bg-slate-950 px-3 py-2 text-xs font-mono font-bold text-amber-300 border border-white/10 focus:border-amber-400 focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = parseFloat(editingContractor.hourlyRateEth || "0.00010");
+                                      setEditingContractor({
+                                        ...editingContractor,
+                                        hourlyRateEth: (cur + 0.00002).toFixed(5),
+                                      });
+                                    }}
+                                    className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold"
+                                    title="Increase +0.00002 ETH"
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = parseFloat(editingContractor.hourlyRateEth || "0.00010");
+                                      setEditingContractor({
+                                        ...editingContractor,
+                                        hourlyRateEth: Math.max(0.00002, cur - 0.00002).toFixed(5),
+                                      });
+                                    }}
+                                    className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold"
+                                    title="Decrease -0.00002 ETH"
+                                  >
+                                    -
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                  Max Escrow Capacity
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editingContractor.maxCapacityEth || "0.05"}
+                                  onChange={(e) =>
+                                    setEditingContractor({
+                                      ...editingContractor,
+                                      maxCapacityEth: e.target.value,
+                                    })
+                                  }
+                                  className="w-24 rounded-xl bg-slate-950 px-3 py-2 text-xs font-mono text-slate-200 border border-white/10 focus:border-cyan-400 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 3 DISTINCT PRICING TIER PACKAGES */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            {/* LEVEL 1: EXPRESS */}
+                            {(() => {
+                              const t1 = editingContractor.pricingTiers?.find((t) => t.tierId === "level_1") || {
+                                tierId: "level_1" as const,
+                                title: "Level 1: Express AI Clause Audit",
+                                priceEth: editingContractor.hourlyRateEth || "0.00010",
+                                turnaround: "24 Hours",
+                                scopeSummary: "Rapid smart contract clause review, vulnerability identification, and compliance verification report.",
+                              };
+
+                              const updateT1 = (field: keyof PricingTier, val: string) => {
+                                const tiers = [...(editingContractor.pricingTiers || [])];
+                                const idx = tiers.findIndex((t) => t.tierId === "level_1");
+                                const updated = { ...t1, [field]: val };
+                                if (idx >= 0) tiers[idx] = updated;
+                                else tiers.push(updated);
+                                setEditingContractor({ ...editingContractor, pricingTiers: tiers });
+                              };
+
+                              return (
+                                <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 space-y-3 relative overflow-hidden">
+                                  <div className="flex items-center justify-between pb-2 border-b border-cyan-500/20">
+                                    <span className="text-xs font-black text-cyan-300 flex items-center gap-1.5">
+                                      <Zap className="w-3.5 h-3.5 text-cyan-400" /> Level 1: Starter / Express
+                                    </span>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold">
+                                      {t1.priceEth} ETH
+                                    </span>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Milestone Package Title
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={t1.title}
+                                      onChange={(e) => updateT1("title", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs font-semibold text-white border border-cyan-500/20 focus:border-cyan-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Milestone Price (ETH)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={t1.priceEth}
+                                      onChange={(e) => updateT1("priceEth", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs font-mono font-bold text-cyan-300 border border-cyan-500/20 focus:border-cyan-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="text-[10px] text-slate-400 font-bold">
+                                        Turnaround Delivery Time
+                                      </label>
+                                      <div className="flex gap-1">
+                                        {["12 Hours", "24 Hours", "48 Hours"].map((preset) => (
+                                          <button
+                                            type="button"
+                                            key={preset}
+                                            onClick={() => updateT1("turnaround", preset)}
+                                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-cyan-500/30 text-slate-300"
+                                          >
+                                            {preset}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      value={t1.turnaround}
+                                      onChange={(e) => updateT1("turnaround", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs text-slate-300 border border-cyan-500/20 focus:border-cyan-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Deliverable Scope Summary
+                                    </label>
+                                    <textarea
+                                      rows={3}
+                                      value={t1.scopeSummary}
+                                      onChange={(e) => updateT1("scopeSummary", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-[11px] text-slate-300 border border-cyan-500/20 focus:border-cyan-400 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* LEVEL 2: STANDARD */}
+                            {(() => {
+                              const t2 = editingContractor.pricingTiers?.find((t) => t.tierId === "level_2") || {
+                                tierId: "level_2" as const,
+                                title: "Level 2: Comprehensive Architecture & Security",
+                                priceEth: (parseFloat(editingContractor.hourlyRateEth || "0.00010") * 2.5).toFixed(5),
+                                turnaround: "3 Days",
+                                scopeSummary: "Full-stack EVM architecture review, escrow state machine verification, and custom legal contract synthesizer.",
+                              };
+
+                              const updateT2 = (field: keyof PricingTier, val: string) => {
+                                const tiers = [...(editingContractor.pricingTiers || [])];
+                                const idx = tiers.findIndex((t) => t.tierId === "level_2");
+                                const updated = { ...t2, [field]: val };
+                                if (idx >= 0) tiers[idx] = updated;
+                                else tiers.push(updated);
+                                setEditingContractor({ ...editingContractor, pricingTiers: tiers });
+                              };
+
+                              return (
+                                <div className="p-4 rounded-2xl bg-purple-950/20 border border-purple-500/30 space-y-3 relative overflow-hidden">
+                                  <div className="flex items-center justify-between pb-2 border-b border-purple-500/20">
+                                    <span className="text-xs font-black text-purple-300 flex items-center gap-1.5">
+                                      <Shield className="w-3.5 h-3.5 text-purple-400" /> Level 2: Standard
+                                    </span>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">
+                                      {t2.priceEth} ETH
+                                    </span>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Milestone Package Title
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={t2.title}
+                                      onChange={(e) => updateT2("title", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs font-semibold text-white border border-purple-500/20 focus:border-purple-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Milestone Price (ETH)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={t2.priceEth}
+                                      onChange={(e) => updateT2("priceEth", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs font-mono font-bold text-purple-300 border border-purple-500/20 focus:border-purple-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="text-[10px] text-slate-400 font-bold">
+                                        Turnaround Delivery Time
+                                      </label>
+                                      <div className="flex gap-1">
+                                        {["2 Days", "3 Days", "5 Days"].map((preset) => (
+                                          <button
+                                            type="button"
+                                            key={preset}
+                                            onClick={() => updateT2("turnaround", preset)}
+                                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-purple-500/30 text-slate-300"
+                                          >
+                                            {preset}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      value={t2.turnaround}
+                                      onChange={(e) => updateT2("turnaround", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs text-slate-300 border border-purple-500/20 focus:border-purple-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Deliverable Scope Summary
+                                    </label>
+                                    <textarea
+                                      rows={3}
+                                      value={t2.scopeSummary}
+                                      onChange={(e) => updateT2("scopeSummary", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-[11px] text-slate-300 border border-purple-500/20 focus:border-purple-400 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* LEVEL 3: ENTERPRISE */}
+                            {(() => {
+                              const t3 = editingContractor.pricingTiers?.find((t) => t.tierId === "level_3") || {
+                                tierId: "level_3" as const,
+                                title: "Level 3: Full Protocol & ZK Settlement Seal",
+                                priceEth: (parseFloat(editingContractor.hourlyRateEth || "0.00010") * 5).toFixed(5),
+                                turnaround: "7 Days",
+                                scopeSummary: "End-to-end zero-knowledge verifier integration, formal mathematical proofs, and notarized on-chain certification.",
+                              };
+
+                              const updateT3 = (field: keyof PricingTier, val: string) => {
+                                const tiers = [...(editingContractor.pricingTiers || [])];
+                                const idx = tiers.findIndex((t) => t.tierId === "level_3");
+                                const updated = { ...t3, [field]: val };
+                                if (idx >= 0) tiers[idx] = updated;
+                                else tiers.push(updated);
+                                setEditingContractor({ ...editingContractor, pricingTiers: tiers });
+                              };
+
+                              return (
+                                <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-3 relative overflow-hidden">
+                                  <div className="flex items-center justify-between pb-2 border-b border-emerald-500/20">
+                                    <span className="text-xs font-black text-emerald-300 flex items-center gap-1.5">
+                                      <Award className="w-3.5 h-3.5 text-emerald-400" /> Level 3: Enterprise / ZK
+                                    </span>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                                      {t3.priceEth} ETH
+                                    </span>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Milestone Package Title
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={t3.title}
+                                      onChange={(e) => updateT3("title", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs font-semibold text-white border border-emerald-500/20 focus:border-emerald-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Milestone Price (ETH)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={t3.priceEth}
+                                      onChange={(e) => updateT3("priceEth", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs font-mono font-bold text-emerald-300 border border-emerald-500/20 focus:border-emerald-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="text-[10px] text-slate-400 font-bold">
+                                        Turnaround Delivery Time
+                                      </label>
+                                      <div className="flex gap-1">
+                                        {["5 Days", "7 Days", "14 Days"].map((preset) => (
+                                          <button
+                                            type="button"
+                                            key={preset}
+                                            onClick={() => updateT3("turnaround", preset)}
+                                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-emerald-500/30 text-slate-300"
+                                          >
+                                            {preset}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      value={t3.turnaround}
+                                      onChange={(e) => updateT3("turnaround", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-xs text-slate-300 border border-emerald-500/20 focus:border-emerald-400 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                      Deliverable Scope Summary
+                                    </label>
+                                    <textarea
+                                      rows={3}
+                                      value={t3.scopeSummary}
+                                      onChange={(e) => updateT3("scopeSummary", e.target.value)}
+                                      className="w-full rounded-xl bg-slate-950 p-2 text-[11px] text-slate-300 border border-emerald-500/20 focus:border-emerald-400 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* ACTION BUTTONS & FEEDBACK BANNER */}
+                          {contractorSaveSuccess && (
+                            <div className="p-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>Milestone rates for {editingContractor.fullName} successfully updated and synced across Base Sepolia Escrow Vault!</span>
+                            </div>
+                          )}
+
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-white/10">
+                            <button
+                              type="button"
+                              onClick={handleResetContractorToDefaults}
+                              className="text-xs text-slate-400 hover:text-white px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 transition-colors border border-white/5"
+                            >
+                              Reset to Default Studio Rates
+                            </button>
+
+                            <button
+                              type="submit"
+                              disabled={isSavingContractor}
+                              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-black font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50"
+                            >
+                              {isSavingContractor ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  <span>Saving Rates Live...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Save className="w-4 h-4" />
+                                  <span>Save {editingContractor.fullName}&apos;s Rates Live</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+
+                {/* SUBTAB 2: ESCROW VAULT MILESTONE MULTIPLIERS */}
+                {contractorSubTab === "milestones" && (
+                  <form onSubmit={handleSaveMilestonesConfig} className="space-y-6">
+                    <div className="p-6 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-xl space-y-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                        <div>
+                          <h3 className="text-base font-bold text-white flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-purple-400" />
+                            <span>Escrow Vault Milestone Multipliers (1 - 4 Milestones)</span>
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Configure the 4 milestone buttons and payout phase descriptions presented to clients in the Escrow Vault (/vault).
+                          </p>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const standard = [
+                                { tier: 1, title: "1 Milestone", phaseName: "Milestone 1: Web3 Legal Architecture & Discovery", summary: "Single Deliverable: Rapid clause verification & preliminary risk audit.", multiplier: 1.0 },
+                                { tier: 2, title: "2 Milestones", phaseName: "Milestones 1 & 2: Audit & Custom Contract Drafting", summary: "Two Deliverables: In-depth audit report plus custom legal contract drafting.", multiplier: 2.0 },
+                                { tier: 3, title: "3 Milestones", phaseName: "Milestones 1, 2 & 3: Full Audit + Security Verification", summary: "Three Deliverables: Legal audit, contract drafting, and formal zk security verification.", multiplier: 3.0 },
+                                { tier: 4, title: "4 Milestones", phaseName: "Milestones 1 to 4: Full Enterprise Legal Suite & Mainnet Seal", summary: "Four Deliverables: End-to-end legal protocol, multi-jurisdiction compliance, and final notarized seals.", multiplier: 4.0 },
+                              ];
+                              setSettings({ ...settings, milestoneTiers: standard });
+                            }}
+                            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300"
+                          >
+                            Linear (1x, 2x, 3x, 4x)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const discounted = [
+                                { tier: 1, title: "1 Milestone", phaseName: "Milestone 1: Web3 Legal Architecture & Discovery", summary: "Single Deliverable: Rapid clause verification & preliminary risk audit.", multiplier: 1.0 },
+                                { tier: 2, title: "2 Milestones (5% Off)", phaseName: "Milestones 1 & 2: Audit & Custom Contract Drafting", summary: "Two Deliverables: In-depth audit report plus custom legal contract drafting.", multiplier: 1.9 },
+                                { tier: 3, title: "3 Milestones (7% Off)", phaseName: "Milestones 1, 2 & 3: Full Audit + Security Verification", summary: "Three Deliverables: Legal audit, contract drafting, and formal zk security verification.", multiplier: 2.8 },
+                                { tier: 4, title: "4 Milestones (10% Off)", phaseName: "Milestones 1 to 4: Full Enterprise Legal Suite & Mainnet Seal", summary: "Four Deliverables: End-to-end legal protocol, multi-jurisdiction compliance, and final notarized seals.", multiplier: 3.6 },
+                              ];
+                              setSettings({ ...settings, milestoneTiers: discounted });
+                            }}
+                            className="px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30"
+                          >
+                            Volume Discount
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 4 Milestone Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(settings.milestoneTiers || DEFAULT_MILESTONE_TIERS).map((m, idx) => (
+                          <div
+                            key={m.tier}
+                            className="p-4 rounded-2xl bg-slate-950/70 border border-white/10 space-y-3 relative group hover:border-purple-500/30 transition-all"
+                          >
+                            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                              <span className="text-xs font-black text-purple-300 flex items-center gap-1.5">
+                                <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-300 flex items-center justify-center text-[10px] font-bold">
+                                  {m.tier}
+                                </span>
+                                <span>Tier {m.tier} Configuration</span>
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-400 font-bold">Multiplier:</span>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0.1"
+                                  max="10.0"
+                                  value={m.multiplier}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || m.tier;
+                                    const updated = [...(settings.milestoneTiers || DEFAULT_MILESTONE_TIERS)];
+                                    updated[idx] = { ...updated[idx], multiplier: val };
+                                    setSettings({ ...settings, milestoneTiers: updated });
+                                  }}
+                                  className="w-16 rounded-lg bg-slate-900 px-2 py-1 text-xs font-mono font-bold text-amber-300 border border-white/10 text-center"
+                                />
+                                <span className="text-xs text-amber-300 font-mono">x</span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                  Button Label Title
+                                </label>
+                                <input
+                                  type="text"
+                                  value={m.title}
+                                  onChange={(e) => {
+                                    const updated = [...(settings.milestoneTiers || DEFAULT_MILESTONE_TIERS)];
+                                    updated[idx] = { ...updated[idx], title: e.target.value };
+                                    setSettings({ ...settings, milestoneTiers: updated });
+                                  }}
+                                  className="w-full rounded-xl bg-slate-900 p-2 text-xs font-bold text-white border border-white/10 focus:border-purple-400 focus:outline-none"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                  Payout Phases
+                                </label>
+                                <div className="text-xs text-slate-300 font-mono py-2">
+                                  {m.tier} Release Stage{m.tier > 1 ? "s" : ""}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                Phase Name Displayed in Escrow
+                              </label>
+                              <input
+                                type="text"
+                                value={m.phaseName}
+                                onChange={(e) => {
+                                  const updated = [...(settings.milestoneTiers || DEFAULT_MILESTONE_TIERS)];
+                                  updated[idx] = { ...updated[idx], phaseName: e.target.value };
+                                  setSettings({ ...settings, milestoneTiers: updated });
+                                }}
+                                className="w-full rounded-xl bg-slate-900 p-2 text-xs text-cyan-300 font-semibold border border-white/10 focus:border-cyan-400 focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] text-slate-400 font-bold block mb-1">
+                                Deliverable Scope Summary
+                              </label>
+                              <textarea
+                                rows={2}
+                                value={m.summary}
+                                onChange={(e) => {
+                                  const updated = [...(settings.milestoneTiers || DEFAULT_MILESTONE_TIERS)];
+                                  updated[idx] = { ...updated[idx], summary: e.target.value };
+                                  setSettings({ ...settings, milestoneTiers: updated });
+                                }}
+                                className="w-full rounded-xl bg-slate-900 p-2 text-[11px] text-slate-300 border border-white/10 focus:border-purple-400 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Default Fallback Milestone Rate */}
+                      <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold text-white">Default Fallback Milestone Base Rate</div>
+                          <div className="text-[11px] text-slate-400">Used if a selected contractor has not defined custom rates</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={settings.defaultMilestoneBaseRateEth || "0.00010"}
+                            onChange={(e) => setSettings({ ...settings, defaultMilestoneBaseRateEth: e.target.value })}
+                            className="w-28 rounded-xl bg-slate-900 px-3 py-2 text-xs font-mono font-bold text-amber-300 border border-white/10 focus:border-amber-400 focus:outline-none"
+                          />
+                          <span className="text-xs font-mono text-slate-400">ETH</span>
+                        </div>
+                      </div>
+
+                      {/* Success Banner */}
+                      {milestonesSaveSuccess && (
+                        <div className="p-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>Escrow milestone tier configurations saved and synced to the client Escrow Vault!</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end pt-3 border-t border-white/10">
+                        <button
+                          type="submit"
+                          disabled={isSavingMilestones}
+                          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-400 hover:to-cyan-400 text-black font-bold text-xs shadow-lg shadow-purple-500/20 transition-all disabled:opacity-50"
+                        >
+                          {isSavingMilestones ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Saving Milestones Config...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              <span>Save Milestone Tier Configurations Live</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+
+                {/* SUBTAB 3: CONTRACTOR DIRECTORY TABLE */}
+                {contractorSubTab === "directory" && (
+                  <div className="p-6 rounded-3xl bg-slate-900/70 border border-white/10 space-y-4 backdrop-blur-xl shadow-xl animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-base text-white">Verified Contractor Directory &amp; Rates</h3>
+                        <p className="text-xs text-slate-400">Legal tech specialists and smart contract developers available for escrow hiring</p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full bg-slate-800 text-xs font-semibold text-slate-300 font-mono">
+                        {contractorsList.length} Active Profiles
+                      </span>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 overflow-hidden">
+                      <table className="w-full text-left text-xs text-slate-300">
+                        <thead className="bg-slate-950/80 text-slate-400 font-semibold border-b border-white/10">
+                          <tr>
+                            <th className="py-3 px-4">Contractor</th>
+                            <th className="py-3 px-4">Role & Studio</th>
+                            <th className="py-3 px-4">Payout Address</th>
+                            <th className="py-3 px-4">Milestone Rates (L1 / L2 / L3)</th>
+                            <th className="py-3 px-4">Trust Score</th>
+                            <th className="py-3 px-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {contractorsList.map((c) => {
+                            const l1 = c.pricingTiers?.find((t) => t.tierId === "level_1")?.priceEth || c.hourlyRateEth;
+                            const l2 = c.pricingTiers?.find((t) => t.tierId === "level_2")?.priceEth || (parseFloat(l1) * 2.5).toFixed(5);
+                            const l3 = c.pricingTiers?.find((t) => t.tierId === "level_3")?.priceEth || (parseFloat(l1) * 5).toFixed(5);
+
+                            return (
+                              <tr key={c.walletAddress} className="hover:bg-white/[0.02]">
+                                <td className="py-3 px-4 font-bold text-white">{c.fullName}</td>
+                                <td className="py-3 px-4 text-slate-300">{c.roleTitle}</td>
+                                <td className="py-3 px-4 font-mono text-cyan-300">
+                                  {c.walletAddress.slice(0, 6)}...{c.walletAddress.slice(-4)}
+                                </td>
+                                <td className="py-3 px-4 font-mono">
+                                  <div className="flex items-center gap-1.5 text-[11px]">
+                                    <span className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300">{l1}</span>
+                                    <span className="text-slate-600">/</span>
+                                    <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300">{l2}</span>
+                                    <span className="text-slate-600">/</span>
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300">{l3} ETH</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 text-emerald-400 font-bold">{c.reputationScore}%</td>
+                                <td className="py-3 px-4 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedContractorWallet(c.walletAddress);
+                                      setContractorSubTab("tiers");
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/40 transition-colors"
+                                  >
+                                    Edit Rates &amp; Tiers
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUBTAB 4: BULK RATE CALIBRATOR */}
+                {contractorSubTab === "bulk" && (
+                  <div className="p-6 rounded-3xl bg-slate-900/80 border border-white/10 backdrop-blur-xl shadow-xl space-y-5">
+                    <div>
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        <Sliders className="w-4 h-4 text-amber-400" />
+                        <span>Global Micro-Rate Calibrator</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Batch calibrate all contractor milestone prices simultaneously by a percentage factor. Useful for market-wide pricing adjustments or testnet promotions.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleBulkRateAdjustment(10)}
+                        className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 hover:border-emerald-500 text-center transition-all group"
+                      >
+                        <div className="text-lg font-black text-emerald-400 group-hover:scale-105 transition-transform">+10%</div>
+                        <div className="text-[11px] text-slate-400 mt-1">Calibrate Rates Up (+10%)</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkRateAdjustment(25)}
+                        className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 hover:border-cyan-500 text-center transition-all group"
+                      >
+                        <div className="text-lg font-black text-cyan-400 group-hover:scale-105 transition-transform">+25%</div>
+                        <div className="text-[11px] text-slate-400 mt-1">Surge Rate Multiplier (+25%)</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkRateAdjustment(-10)}
+                        className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/30 hover:border-amber-500 text-center transition-all group"
+                      >
+                        <div className="text-lg font-black text-amber-400 group-hover:scale-105 transition-transform">-10%</div>
+                        <div className="text-[11px] text-slate-400 mt-1">Discount Calibration (-10%)</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleBulkRateAdjustment(-25)}
+                        className="p-4 rounded-2xl bg-purple-950/20 border border-purple-500/30 hover:border-purple-500 text-center transition-all group"
+                      >
+                        <div className="text-lg font-black text-purple-400 group-hover:scale-105 transition-transform">-25%</div>
+                        <div className="text-[11px] text-slate-400 mt-1">Hackathon Promo (-25%)</div>
+                      </button>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/5 text-xs text-slate-400 space-y-1">
+                      <div className="font-bold text-slate-300">ℹ️ Rate Calibration Information:</div>
+                      <p>
+                        Applying a bulk calibration updates both the base hourly rate and all 3 service tier packages (Level 1, Level 2, Level 3) for all {contractorsList.length} verified contractors on Base Sepolia.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

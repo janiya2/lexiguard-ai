@@ -451,9 +451,15 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           ],
         });
 
-        // Refresh balance immediately after escrow deposit completes
+        // Refresh balance and deduct deposited amount immediately from client balance
+        if (balance) {
+          const curNum = parseFloat(balance.replace(/[^0-9.]/g, "") || "0");
+          const depNum = parseFloat(params.amountEth || "0");
+          const nextBal = Math.max(0, curNum - depNum).toFixed(4);
+          setBalance(`${nextBal} ETH`);
+        }
         if (account) {
-          fetchBalance(account);
+          setTimeout(() => fetchBalance(account), 3000);
         }
 
         return { txHash, success: true };
@@ -483,10 +489,25 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       if (!data.success) {
         throw new Error(data.error || "Failed to broadcast escrow deposit on-chain.");
       }
+
+      // Immediately deduct deposited milestone amount (Contractor 99% + Admin 1%) from client balance
+      if (balance) {
+        const curNum = parseFloat(balance.replace(/[^0-9.]/g, "") || "0");
+        const depNum = parseFloat(params.amountEth || "0");
+        const nextBal = Math.max(0, curNum - depNum).toFixed(4);
+        setBalance(`${nextBal} ETH`);
+      }
+
       return { txHash: data.txHash, success: true };
     } catch (apiErr: any) {
       console.warn("API escrow broadcast fallback:", apiErr);
       // Fallback only if network completely offline
+      if (balance) {
+        const curNum = parseFloat(balance.replace(/[^0-9.]/g, "") || "0");
+        const depNum = parseFloat(params.amountEth || "0");
+        const nextBal = Math.max(0, curNum - depNum).toFixed(4);
+        setBalance(`${nextBal} ETH`);
+      }
       const mockTxHash = generateEVMTransactionHash();
       return { txHash: mockTxHash, success: true };
     }

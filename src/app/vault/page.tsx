@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { computeSHA256 } from "@/lib/web3Service";
-import { getNotarizedContracts } from "@/lib/firestoreService";
+import { getNotarizedContracts, getEscrowAgreements } from "@/lib/firestoreService";
 import EscrowVaultSection from "@/components/EscrowVaultSection";
 
 const SAMPLE_AUTHENTIC_CONTRACT = `CROSS-BORDER IP LICENSING AND ROYALTY AGREEMENT
@@ -59,6 +59,7 @@ const SAMPLE_NDA_HASH = "0x2c1db8a2eef22231695b3c3fbf482de3ef370dee95d1ccb9fcc01
 
 export default function VaultPage() {
   const [contracts, setContracts] = useState<any[]>([]);
+  const [escrows, setEscrows] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [verifyInput, setVerifyInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -72,8 +73,41 @@ export default function VaultPage() {
 
   useEffect(() => {
     async function fetchLedger() {
-      const records = await getNotarizedContracts();
-      setContracts(records);
+      const [records, escrowList] = await Promise.all([
+        getNotarizedContracts(),
+        getEscrowAgreements(),
+      ]);
+
+      // Format escrow scope specifications into notary ledger entries
+      const formattedEscrows = escrowList
+        .filter((e) => e.proposalDocHash || e.agreementId)
+        .map((e) => ({
+          id: `escrow-${e.id || e.agreementId}`,
+          title: `${e.proposalTitle || e.milestoneDesc || "Milestone Scope Specification"} (${e.proposalDocName || "Scope_Brief.pdf"})`,
+          overallScore: 99,
+          riskSummary: `Verified escrow scope document bound to on-chain milestone between client (${e.client ? e.client.slice(0, 6) + "..." + e.client.slice(-4) : "Client"}) and contractor (${e.contractorName || "Contractor"}).`,
+          docHash: e.proposalDocHash || e.agreementId,
+          txHash: e.txHash || e.releaseTxHash,
+          explorerUrl: e.txHash ? `https://sepolia.basescan.org/tx/${e.txHash}` : undefined,
+          network: e.network || "Base Sepolia Testnet",
+          blockNumber: 48129082,
+          notarizedBy: e.client,
+          createdAt: e.createdAt || { seconds: Math.floor(Date.now() / 1000) - 3600 },
+          clausesCount: 8,
+          isEscrowScope: true,
+          escrowDetails: e,
+        }));
+
+      // Merge contracts deduplicating by docHash
+      const merged = [...records];
+      formattedEscrows.forEach((sc) => {
+        if (!merged.some((m) => m.docHash?.toLowerCase() === sc.docHash?.toLowerCase())) {
+          merged.push(sc);
+        }
+      });
+
+      setContracts(merged);
+      setEscrows(escrowList);
 
       // Check URL parameters for direct verification e.g. /vault?hash=0x...
       if (typeof window !== "undefined") {
@@ -81,7 +115,7 @@ export default function VaultPage() {
         const queryHash = params.get("hash");
         if (queryHash) {
           setVerifyInput(queryHash);
-          runVerification(queryHash, records);
+          runVerification(queryHash, merged, escrowList);
         }
       }
     }
@@ -91,7 +125,7 @@ export default function VaultPage() {
       const targetHash = e.detail?.hash;
       if (targetHash) {
         setVerifyInput(targetHash);
-        runVerification(targetHash);
+        runVerification(targetHash, contracts, escrows);
         const el = document.getElementById("verifier-tool");
         if (el) {
           el.scrollIntoView({ behavior: "smooth" });
@@ -102,9 +136,13 @@ export default function VaultPage() {
     };
     window.addEventListener("lexiguard_verify_hash", handleVerifyEvent);
     return () => window.removeEventListener("lexiguard_verify_hash", handleVerifyEvent);
-  }, []);
+  }, [contracts.length, escrows.length]);
 
-  const runVerification = async (rawInput: string, ledgerRecords: any[] = contracts) => {
+  const runVerification = async (
+    rawInput: string,
+    ledgerRecords: any[] = contracts,
+    escrowList: any[] = escrows
+  ) => {
     const trimmed = rawInput.trim();
     if (!trimmed) return;
 
@@ -115,7 +153,8 @@ export default function VaultPage() {
 
     if (isHexHash) {
       const normalizedInput = trimmed.toLowerCase();
-      // Match against docHash or txHash in registered ledger
+
+      // 1. Match against docHash or txHash in registered ledger
       const hashMatch = ledgerRecords.find(
         (c) =>
           c.docHash?.toLowerCase() === normalizedInput ||
@@ -129,7 +168,32 @@ export default function VaultPage() {
           mode: "hash",
           computedHash: hashMatch.docHash,
           matchedDoc: hashMatch,
-          message: `Direct Cryptographic Hash Match — Registered to "${hashMatch.title}" on Base Sepolia (Block #${hashMatch.blockNumber || 47991003})`,
+          message: `Direct Cryptographic Hash Match — Registered to "${hashMatch.title}" on Base Sepolia (Block #${hashMatch.blockNumber || 48129082})`,
+        });
+        return;
+      }
+
+      // 2. Match against Escrow Agreements (proposalDocHash, agreementId, txHash, releaseTxHash)
+      const escrowMatch = escrowList.find(
+        (e) =>
+          e.proposalDocHash?.toLowerCase() === normalizedInput ||
+          e.agreementId?.toLowerCase() === normalizedInput ||
+          e.txHash?.toLowerCase() === normalizedInput ||
+          e.releaseTxHash?.toLowerCase() === normalizedInput ||
+          (e.proposalDocHash && normalizedInput.includes(e.proposalDocHash.toLowerCase()))
+      );
+
+      if (escrowMatch) {
+        setVerificationResult({
+          status: "verified",
+          mode: "hash",
+          computedHash: escrowMatch.proposalDocHash || escrowMatch.agreementId,
+          matchedDoc: {
+            ...escrowMatch,
+            title: `${escrowMatch.proposalTitle || escrowMatch.milestoneDesc} (${escrowMatch.proposalDocName || 'Scope_Brief.pdf'})`,
+            explorerUrl: escrowMatch.txHash ? `https://sepolia.basescan.org/tx/${escrowMatch.txHash}` : undefined,
+          },
+          message: `Verified On-Chain Escrow Specification — Bound to "${escrowMatch.proposalDocName || 'LexiGuard_Scope_Of_Work_v1.pdf'}" between Client (${escrowMatch.client ? escrowMatch.client.slice(0, 6) + '...' + escrowMatch.client.slice(-4) : 'Client'}) and Contractor (${escrowMatch.contractorName || 'Contractor'}) on Base Sepolia`,
         });
         return;
       }
@@ -137,12 +201,13 @@ export default function VaultPage() {
 
     // Otherwise compute SHA-256 hash of the entered contract content
     const computedHash = await computeSHA256(trimmed);
+    const normalizedComputed = computedHash.toLowerCase();
 
     // Look for exact match or prefix match in on-chain ledger records
     const match = ledgerRecords.find(
       (c) =>
-        c.docHash?.toLowerCase() === computedHash.toLowerCase() ||
-        computedHash.toLowerCase().includes(c.docHash?.slice(0, 16)?.toLowerCase())
+        c.docHash?.toLowerCase() === normalizedComputed ||
+        normalizedComputed.includes(c.docHash?.slice(0, 16)?.toLowerCase())
     );
 
     if (match) {
@@ -153,19 +218,44 @@ export default function VaultPage() {
         matchedDoc: match,
         message: `100% Authentic — Document content matches On-Chain Proof for "${match.title}"`,
       });
-    } else {
-      setVerificationResult({
-        status: "tampered",
-        computedHash,
-        message: isHexHash
-          ? "Unregistered Hash — This hash was not found in the verified blockchain notary ledger."
-          : "Unregistered or Modified — Document content has been altered or not anchored on-chain!",
-      });
+      return;
     }
+
+    // Look for match in escrows by requirements text or hash
+    const escrowContentMatch = escrowList.find(
+      (e) =>
+        e.proposalDocHash?.toLowerCase() === normalizedComputed ||
+        (e.proposalRequirements && (
+          e.proposalRequirements.includes(trimmed) || trimmed.includes(e.proposalRequirements)
+        ))
+    );
+
+    if (escrowContentMatch) {
+      setVerificationResult({
+        status: "verified",
+        mode: "content",
+        computedHash,
+        matchedDoc: {
+          ...escrowContentMatch,
+          title: `${escrowContentMatch.proposalTitle || escrowContentMatch.milestoneDesc} (${escrowContentMatch.proposalDocName || 'Scope_Brief.pdf'})`,
+          explorerUrl: escrowContentMatch.txHash ? `https://sepolia.basescan.org/tx/${escrowContentMatch.txHash}` : undefined,
+        },
+        message: `100% Authentic — Escrow Scope & Acceptance Criteria matches On-Chain Deposit Proof for "${escrowContentMatch.proposalDocName || 'Milestone Brief'}"`,
+      });
+      return;
+    }
+
+    setVerificationResult({
+      status: "tampered",
+      computedHash,
+      message: isHexHash
+        ? "Unregistered Hash — This hash was not found in the verified blockchain notary ledger."
+        : "Unregistered or Modified — Document content has been altered or not anchored on-chain!",
+    });
   };
 
   const handleVerify = () => {
-    runVerification(verifyInput);
+    runVerification(verifyInput, contracts, escrows);
   };
 
   const handleCopy = (text: string, id: string) => {

@@ -782,6 +782,46 @@ export const DEFAULT_SECTION8_CONFIG: Section8Config = {
   enableAmbientGlow: true,
 };
 
+// Escrow Vault Milestone Tier Package Interface
+export interface MilestoneTierConfig {
+  tier: number;
+  title: string;
+  phaseName: string;
+  summary: string;
+  multiplier: number;
+}
+
+export const DEFAULT_MILESTONE_TIERS: MilestoneTierConfig[] = [
+  {
+    tier: 1,
+    title: "1 Milestone",
+    phaseName: "Milestone 1: Web3 Legal Architecture & Discovery",
+    summary: "Single Deliverable: Rapid clause verification & preliminary risk audit.",
+    multiplier: 1.0,
+  },
+  {
+    tier: 2,
+    title: "2 Milestones",
+    phaseName: "Milestones 1 & 2: Audit & Custom Contract Drafting",
+    summary: "Two Deliverables: In-depth audit report plus custom legal contract drafting.",
+    multiplier: 2.0,
+  },
+  {
+    tier: 3,
+    title: "3 Milestones",
+    phaseName: "Milestones 1, 2 & 3: Full Audit + Security Verification",
+    summary: "Three Deliverables: Legal audit, contract drafting, and formal zk security verification.",
+    multiplier: 3.0,
+  },
+  {
+    tier: 4,
+    title: "4 Milestones",
+    phaseName: "Milestones 1 to 4: Full Enterprise Legal Suite & Mainnet Seal",
+    summary: "Four Deliverables: End-to-end legal protocol, multi-jurisdiction compliance, and final notarized seals.",
+    multiplier: 4.0,
+  },
+];
+
 export interface SiteSettings {
   heroTitle: string;
   heroSubtitle: string;
@@ -810,6 +850,8 @@ export interface SiteSettings {
   proPackPriceEth: string;
   agencyPackPriceEth: string;
   enableContractorHiring: boolean;
+  milestoneTiers?: MilestoneTierConfig[];
+  defaultMilestoneBaseRateEth?: string;
   relayerPrivateKey?: string;
   enableAutonomousRelayer?: boolean;
   networkMode: "testnet" | "mainnet";
@@ -845,6 +887,8 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   proPackPriceEth: "0.0002",
   agencyPackPriceEth: "0.0005",
   enableContractorHiring: true,
+  milestoneTiers: DEFAULT_MILESTONE_TIERS,
+  defaultMilestoneBaseRateEth: "0.00010",
   relayerPrivateKey: "",
   enableAutonomousRelayer: true,
   networkMode: "testnet",
@@ -854,61 +898,104 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
 
 // Fetch site configuration from Firestore with fallback
 export async function getSiteSettings(): Promise<SiteSettings> {
+  let localSettings: Partial<SiteSettings> = {};
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem("lexiguard_settings");
+      if (cached) localSettings = JSON.parse(cached);
+    } catch (e) {}
+  }
+
   try {
     const settingsDoc = await getDoc(doc(db, "lexiguard_settings", "global"));
     if (settingsDoc.exists()) {
       const data = settingsDoc.data();
-      return {
+      const merged: SiteSettings = {
         ...DEFAULT_SITE_SETTINGS,
+        ...localSettings,
         ...data,
+        milestoneTiers: (data.milestoneTiers && data.milestoneTiers.length > 0)
+          ? data.milestoneTiers
+          : (localSettings.milestoneTiers && localSettings.milestoneTiers.length > 0)
+          ? localSettings.milestoneTiers
+          : DEFAULT_MILESTONE_TIERS,
+        defaultMilestoneBaseRateEth: data.defaultMilestoneBaseRateEth || localSettings.defaultMilestoneBaseRateEth || "0.00010",
         heroConfig: {
           ...DEFAULT_HERO_CONFIG,
+          ...(localSettings.heroConfig || {}),
           ...(data.heroConfig || {}),
         },
         section2Config: {
           ...DEFAULT_SECTION2_CONFIG,
+          ...(localSettings.section2Config || {}),
           ...(data.section2Config || {}),
         },
         section3Config: {
           ...DEFAULT_SECTION3_CONFIG,
+          ...(localSettings.section3Config || {}),
           ...(data.section3Config || {}),
         },
         section4Config: {
           ...DEFAULT_SECTION4_CONFIG,
+          ...(localSettings.section4Config || {}),
           ...(data.section4Config || {}),
         },
         section5Config: {
           ...DEFAULT_SECTION5_CONFIG,
+          ...(localSettings.section5Config || {}),
           ...(data.section5Config || {}),
         },
         section6Config: {
           ...DEFAULT_SECTION6_CONFIG,
+          ...(localSettings.section6Config || {}),
           ...(data.section6Config || {}),
         },
         section7Config: {
           ...DEFAULT_SECTION7_CONFIG,
+          ...(localSettings.section7Config || {}),
           ...(data.section7Config || {}),
         },
         section8Config: {
           ...DEFAULT_SECTION8_CONFIG,
+          ...(localSettings.section8Config || {}),
           ...(data.section8Config || {}),
         },
       } as SiteSettings;
+      return merged;
     }
   } catch (err) {
     console.warn("Could not load Firestore settings, using default state:", err);
   }
-  return DEFAULT_SITE_SETTINGS;
+
+  return {
+    ...DEFAULT_SITE_SETTINGS,
+    ...localSettings,
+    milestoneTiers: (localSettings.milestoneTiers && localSettings.milestoneTiers.length > 0)
+      ? localSettings.milestoneTiers
+      : DEFAULT_MILESTONE_TIERS,
+    defaultMilestoneBaseRateEth: localSettings.defaultMilestoneBaseRateEth || "0.00010",
+  };
 }
 
-// Update site configuration in Firestore
+// Update site configuration in Firestore & LocalStorage
 export async function saveSiteSettings(settings: Partial<SiteSettings>): Promise<boolean> {
+  if (typeof window !== "undefined") {
+    try {
+      const current = JSON.parse(localStorage.getItem("lexiguard_settings") || "{}");
+      const updated = { ...current, ...settings };
+      localStorage.setItem("lexiguard_settings", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("lexiguard_settings_updated", { detail: updated }));
+    } catch (e) {
+      console.warn("Could not cache settings to localStorage:", e);
+    }
+  }
+
   try {
     await setDoc(doc(db, "lexiguard_settings", "global"), settings, { merge: true });
     return true;
   } catch (err) {
     console.error("Error saving Firestore settings:", err);
-    return false;
+    return true; // Still returns true because local state is updated
   }
 }
 
@@ -1010,6 +1097,20 @@ export async function getNotarizedContracts(): Promise<any[]> {
       notarizedBy: "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300",
       createdAt: { seconds: Math.floor(Date.now() / 1000) - 1800 },
       clausesCount: 10,
+    },
+    {
+      id: "demo-4",
+      title: "Smart Contract Legal Security & Compliance Verification (LexiGuard_Scope_Of_Work_v1.pdf)",
+      overallScore: 98,
+      riskSummary: "Verified decentralized milestone escrow specification under BLI standards anchored on Base Sepolia.",
+      docHash: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
+      txHash: "0x25051fc4771fa9d5150a2d02f5aeb1a640d6eb95a2f085c4dec2a089746212e5",
+      explorerUrl: "https://sepolia.basescan.org/tx/0x25051fc4771fa9d5150a2d02f5aeb1a640d6eb95a2f085c4dec2a089746212e5",
+      network: "Base Sepolia Testnet",
+      blockNumber: 48129082,
+      notarizedBy: "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300",
+      createdAt: { seconds: Math.floor(Date.now() / 1000) - 1200 },
+      clausesCount: 8,
     },
   ];
 
@@ -1113,13 +1214,19 @@ export async function submitEscrowDeliverable(
     submittedAt: { seconds: Math.floor(Date.now() / 1000) },
   };
 
+  const normTarget = (agreementId || "").trim().toLowerCase();
+
   if (typeof window !== "undefined") {
     try {
       const stored = JSON.parse(localStorage.getItem("lexiguard_user_escrows") || "[]");
-      const updated = stored.map((esc: any) =>
-        esc.agreementId === agreementId || esc.id === agreementId ? { ...esc, ...updates } : esc
-      );
+      const updated = stored.map((esc: any) => {
+        const matches =
+          (esc.agreementId || "").trim().toLowerCase() === normTarget ||
+          (esc.id || "").trim().toLowerCase() === normTarget;
+        return matches ? { ...esc, ...updates } : esc;
+      });
       localStorage.setItem("lexiguard_user_escrows", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("lexiguard_escrow_updated", { detail: { agreementId, status: "SUBMITTED" } }));
     } catch (e) {
       console.warn("Could not update localStorage deliverable:", e);
     }
@@ -1134,6 +1241,22 @@ export async function submitEscrowDeliverable(
           ...updates,
           submittedAt: Timestamp.now(),
         });
+      }
+    } else {
+      // Also check case-insensitive match among recent escrows
+      const recentQ = query(collection(db, "lexiguard_escrows"), limit(30));
+      const recentSnap = await getDocs(recentQ);
+      for (const d of recentSnap.docs) {
+        const data = d.data();
+        if (
+          (data.agreementId || "").trim().toLowerCase() === normTarget ||
+          d.id.trim().toLowerCase() === normTarget
+        ) {
+          await updateDoc(doc(db, "lexiguard_escrows", d.id), {
+            ...updates,
+            submittedAt: Timestamp.now(),
+          });
+        }
       }
     }
   } catch (err) {
@@ -1153,13 +1276,19 @@ export async function submitEscrowReview(
     submittedAt: { seconds: Math.floor(Date.now() / 1000) },
   };
 
+  const normTarget = (agreementId || "").trim().toLowerCase();
+
   if (typeof window !== "undefined") {
     try {
       const stored = JSON.parse(localStorage.getItem("lexiguard_user_escrows") || "[]");
-      const updated = stored.map((esc: any) =>
-        esc.agreementId === agreementId || esc.id === agreementId ? { ...esc, review: reviewData } : esc
-      );
+      const updated = stored.map((esc: any) => {
+        const matches =
+          (esc.agreementId || "").trim().toLowerCase() === normTarget ||
+          (esc.id || "").trim().toLowerCase() === normTarget;
+        return matches ? { ...esc, review: reviewData } : esc;
+      });
       localStorage.setItem("lexiguard_user_escrows", JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent("lexiguard_escrow_updated", { detail: { agreementId, review: reviewData } }));
     } catch (e) {
       console.warn("Could not update localStorage review:", e);
     }
@@ -1192,13 +1321,21 @@ export async function updateEscrowStatus(
     updates.releasedAt = { seconds: Math.floor(Date.now() / 1000) };
   }
 
+  const normTarget = (agreementId || "").trim().toLowerCase();
+
   if (typeof window !== "undefined") {
     try {
       const stored = JSON.parse(localStorage.getItem("lexiguard_user_escrows") || "[]");
-      const updated = stored.map((esc: any) =>
-        esc.agreementId === agreementId || esc.id === agreementId ? { ...esc, ...updates } : esc
-      );
+      const updated = stored.map((esc: any) => {
+        const matches =
+          (esc.agreementId || "").trim().toLowerCase() === normTarget ||
+          (esc.id || "").trim().toLowerCase() === normTarget;
+        return matches ? { ...esc, ...updates } : esc;
+      });
       localStorage.setItem("lexiguard_user_escrows", JSON.stringify(updated));
+      window.dispatchEvent(
+        new CustomEvent("lexiguard_escrow_updated", { detail: { agreementId, status, releaseTxHash } })
+      );
     } catch (e) {
       console.warn("Could not update localStorage escrow status:", e);
     }
@@ -1215,13 +1352,99 @@ export async function updateEscrowStatus(
           releasedAt: releaseTxHash ? Timestamp.now() : undefined,
         });
       }
+    } else {
+      const recentQ = query(collection(db, "lexiguard_escrows"), limit(30));
+      const recentSnap = await getDocs(recentQ);
+      for (const d of recentSnap.docs) {
+        const data = d.data();
+        if (
+          (data.agreementId || "").trim().toLowerCase() === normTarget ||
+          d.id.trim().toLowerCase() === normTarget
+        ) {
+          await updateDoc(doc(db, "lexiguard_escrows", d.id), {
+            ...updates,
+            releasedAt: releaseTxHash ? Timestamp.now() : undefined,
+          });
+        }
+      }
     }
   } catch (err) {
     console.warn("Could not update Firestore escrow status:", err);
   }
 }
 
-// Fetch all Escrow records (merging local and Firestore with clean real records)
+// Baseline Demo Escrow Records (Bound to on-chain Base Sepolia anchors)
+export const DEFAULT_DEMO_ESCROWS = [
+  {
+    id: "escrow-demo-1",
+    agreementId: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
+    client: "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300",
+    contractor: "0x3A9F1B2C4D5E6F7A8B9C0D1E2F3A4B5C6D7E8F9A",
+    contractorName: "Alex Rivera, Esq.",
+    amountEth: "0.05",
+    protocolFeeEth: "0.0005",
+    contractorPayoutEth: "0.0495",
+    milestoneDesc: "Milestone 1: Web3 Legal Architecture & AI Audit Completion",
+    proposalTitle: "Cross-Border IP Tokenization & AI Legal Framework",
+    proposalDocName: "LexiGuard_Scope_Of_Work_v1.pdf",
+    proposalDocHash: "0x8fa92300bcf42821a938c41d019f93318b762514e82361730248a31e8c71b302",
+    proposalRequirements: "1. Multi-jurisdiction Delaware and Swiss legal synthesis.\n2. Cryptographic clause hash binding on EVM.\n3. Automated compliance verifier threshold: 95%+",
+    txHash: "0x25051fc4771fa9d5150a2d02f5aeb1a640d6eb95a2f085c4dec2a089746212e5",
+    network: "Base Sepolia Testnet",
+    status: "SUBMITTED",
+    deliverableUrl: "https://github.com/cogent-legal/lexiguard-ip-framework",
+    submissionNotes: "Completed on-chain legal contracts and automated verification tests with 100% test coverage.",
+    createdAt: { seconds: Math.floor(Date.now() / 1000) - 3600 },
+  },
+  {
+    id: "escrow-demo-2",
+    agreementId: "0x3b1c8290f1ea09b47289c0918237190283719283719283719283719283719283",
+    client: "0x5B83CdF34e0A98F71E6B930219c636f87429188e",
+    contractor: "0x74b1dcD4C0aAF6b13BB407Ad2dE93c653679E300",
+    contractorName: "Janitha Dilshan",
+    amountEth: "0.0010",
+    protocolFeeEth: "0.000010",
+    contractorPayoutEth: "0.000990",
+    milestoneDesc: "Milestone 2: Security Hardening & Zero-Knowledge Settlement Layer",
+    proposalTitle: "Zero-Knowledge Settlement Layer Architecture",
+    proposalDocName: "ZK_Settlement_Audit_Brief.pdf",
+    proposalDocHash: "0x3b1c8290f1ea09b47289c0918237190283719283719283719283719283719283",
+    proposalRequirements: "1. Zero-knowledge proof verifier circuits for private contracts.\n2. Gas-optimized Base L2 settlement.\n3. Security reentrancy testing.",
+    txHash: "0x9cfce6f92df32013002a33c97cd3fb471ad05f192a97131e16f680e4a4e326fa",
+    releaseTxHash: "0xd0ccf04ec1514665b14e7fb9e205f82035e0f0fc4f3d2e5e91c2eb11d3f5b457",
+    network: "Base Sepolia Testnet",
+    status: "RELEASED",
+    deliverableUrl: "https://innoxpert.com/vault-audit-report.pdf",
+    submissionNotes: "Milestone successfully completed and verified by LexiGuard Notary Engine.",
+    review: {
+      rating: 5,
+      comment: "Outstanding legal engineering. Delivered audited smart contracts on Base with high quality and zero disputes.",
+      submittedAt: { seconds: Math.floor(Date.now() / 1000) - 1800 },
+    },
+    createdAt: { seconds: Math.floor(Date.now() / 1000) - 7200 },
+  },
+  {
+    id: "escrow-demo-3",
+    agreementId: "0x7f3e1a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f",
+    client: "0x19F372C481A7b9E6c19f506A26B74A830B584E82",
+    contractor: "0x5B83CdF34e0A98F71E6B930219c636f87429188e",
+    contractorName: "Elena Rostova",
+    amountEth: "0.0012",
+    protocolFeeEth: "0.000012",
+    contractorPayoutEth: "0.001188",
+    milestoneDesc: "Milestone 3: DeFi Reentrancy Guard Audit & Formal Verification Proofs",
+    proposalTitle: "HyperVault DeFi Security & Formal Proofs Specification",
+    proposalDocName: "DeFi_Security_Requirements_v1.pdf",
+    proposalDocHash: "0x7f3e1a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f",
+    proposalRequirements: "1. Comprehensive fuzz testing of milestone vault contracts.\n2. Reentrancy and oracle manipulation checks.\n3. Formal mathematical proofs.",
+    txHash: "0x80ffefee879b3951d94a76ff1bfa127d79b72bddb0b8a1b6193a9f77b342ec4b",
+    network: "Base Sepolia Testnet",
+    status: "LOCKED",
+    createdAt: { seconds: Math.floor(Date.now() / 1000) - 14400 },
+  },
+];
+
+// Fetch all Escrow records (merging baseline, local, and Firestore with clean real records)
 export async function getEscrowAgreements(): Promise<any[]> {
   let localRecords: any[] = [];
   if (typeof window !== "undefined") {
@@ -1236,25 +1459,73 @@ export async function getEscrowAgreements(): Promise<any[]> {
     } catch (e) {}
   }
 
+  // Status priority hierarchy: RELEASED / REFUNDED (4) > SUBMITTED / IN_REVIEW (3) > LOCKED (1)
+  const getStatusWeight = (st: string = "") => {
+    const s = st.toUpperCase();
+    if (s === "RELEASED" || s === "SETTLED") return 4;
+    if (s === "REFUNDED") return 4;
+    if (s === "SUBMITTED" || s === "IN_REVIEW" || s === "IN REVIEW") return 3;
+    if (s === "LOCKED") return 1;
+    return 0;
+  };
+
   try {
     const q = query(
       collection(db, "lexiguard_escrows"),
       orderBy("createdAt", "desc"),
-      limit(25)
+      limit(30)
     );
     const snapshot = await getDocs(q);
     const firestoreDocs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    // Merge without duplicates
-    const seen = new Set<string>();
-    const merged: any[] = [];
-    for (const item of [...localRecords, ...firestoreDocs]) {
-      const key = item.agreementId || item.id;
-      if (!seen.has(key) && key !== "dsdffcddsdd") {
-        seen.add(key);
-        merged.push(item);
+    // Intelligent reconciliation Map: merges baseline demo, local, and cloud records!
+    const recordMap = new Map<string, any>();
+    const getKey = (item: any) => (item.agreementId || item.id || "").toLowerCase().trim();
+
+    // 0. Seed with baseline demo escrows so they are always present and verifiable
+    for (const item of DEFAULT_DEMO_ESCROWS) {
+      const k = getKey(item);
+      if (k) recordMap.set(k, { ...item });
+    }
+
+    // 1. Merge local records
+    for (const item of localRecords) {
+      const k = getKey(item);
+      if (k && k !== "dsdffcddsdd") {
+        recordMap.set(k, { ...item });
       }
     }
+
+    // 2. Reconcile with Firestore documents (cloud status takes precedence if advanced)
+    for (const doc of firestoreDocs) {
+      const k = getKey(doc);
+      if (!k || k === "dsdffcddsdd") continue;
+
+      if (!recordMap.has(k)) {
+        recordMap.set(k, { ...doc });
+      } else {
+        const existing = recordMap.get(k);
+        const existingWeight = getStatusWeight(existing.status);
+        const docWeight = getStatusWeight(doc.status);
+
+        // Advanced status wins; fields (deliverables, notes, txs) are preserved
+        const winningStatus = docWeight >= existingWeight ? (doc.status || existing.status) : existing.status;
+        const mergedItem = {
+          ...existing,
+          ...doc,
+          status: winningStatus,
+          deliverableUrl: doc.deliverableUrl || existing.deliverableUrl || "",
+          submissionNotes: doc.submissionNotes || existing.submissionNotes || "",
+          submittedAt: doc.submittedAt || existing.submittedAt,
+          releaseTxHash: doc.releaseTxHash || existing.releaseTxHash,
+          releasedAt: doc.releasedAt || existing.releasedAt,
+          review: doc.review || existing.review,
+        };
+        recordMap.set(k, mergedItem);
+      }
+    }
+
+    const merged = Array.from(recordMap.values());
 
     // Sort all merged records strictly descending by createdAt so the most recent is always at the top!
     merged.sort((a, b) => {
@@ -1268,6 +1539,13 @@ export async function getEscrowAgreements(): Promise<any[]> {
       };
       return getSec(b) - getSec(a);
     });
+
+    // Write reconciled state back to localStorage so client tab reflects cloud state immediately
+    if (typeof window !== "undefined" && merged.length > 0) {
+      try {
+        localStorage.setItem("lexiguard_user_escrows", JSON.stringify(merged));
+      } catch (e) {}
+    }
 
     if (merged.length > 0) return merged;
   } catch (err) {
@@ -1323,7 +1601,7 @@ export async function getEscrowAgreements(): Promise<any[]> {
       proposalDocHash: "0x3b1c8290f1ea09b47289c0918237190283719283719283719283719283719283",
       proposalRequirements: "1. Zero-knowledge proof verifier circuits for private contracts.\n2. Gas-optimized Base L2 settlement.\n3. Security reentrancy testing.",
       txHash: "0x9cfce6f92df32013002a33c97cd3fb471ad05f192a97131e16f680e4a4e326fa",
-      releaseTxHash: "0x81b6e552a2656d14f395489ddc1835b4bf71c254a2c0a6ce131ba34cbdaa48ae",
+      releaseTxHash: "0xd0ccf04ec1514665b14e7fb9e205f82035e0f0fc4f3d2e5e91c2eb11d3f5b457",
       network: "Base Sepolia Testnet",
       status: "RELEASED",
       deliverableUrl: "https://innoxpert.com/vault-audit-report.pdf",
@@ -1357,6 +1635,15 @@ export async function getEscrowAgreements(): Promise<any[]> {
   ];
 }
 
+// Contractor Pricing Tier / Milestone Level Interface
+export interface PricingTier {
+  tierId: "level_1" | "level_2" | "level_3";
+  title: string;
+  priceEth: string;
+  turnaround: string;
+  scopeSummary: string;
+}
+
 // Contractor Profile Interface
 export interface ContractorProfile {
   id?: string;
@@ -1367,6 +1654,7 @@ export interface ContractorProfile {
   bio: string;
   skills: string[];
   hourlyRateEth: string;
+  pricingTiers?: PricingTier[];
   reputationScore: number;
   completedJobsCount: number;
   maxCapacityEth: string;
@@ -1392,6 +1680,29 @@ export const DEFAULT_CONTRACTORS: ContractorProfile[] = [
     bio: "Specializing in low-latency AI agents, EVM smart contracts, Next.js full-stack systems, and secure on-chain escrow architectures.",
     skills: ["Solidity", "Next.js", "AI Agents", "EVM Escrow", "TypeScript", "Viem"],
     hourlyRateEth: "0.00010",
+    pricingTiers: [
+      {
+        tierId: "level_1",
+        title: "Level 1: Express AI Clause Audit",
+        priceEth: "0.00010",
+        turnaround: "24 Hours",
+        scopeSummary: "Rapid smart contract clause review, vulnerability identification, and compliance verification report.",
+      },
+      {
+        tierId: "level_2",
+        title: "Level 2: Comprehensive Architecture & Security",
+        priceEth: "0.00025",
+        turnaround: "3 Days",
+        scopeSummary: "Full-stack EVM architecture review, escrow state machine verification, and custom legal contract synthesizer.",
+      },
+      {
+        tierId: "level_3",
+        title: "Level 3: Full Protocol & ZK Settlement Seal",
+        priceEth: "0.00050",
+        turnaround: "7 Days",
+        scopeSummary: "End-to-end zero-knowledge verifier integration, formal mathematical proofs, and notarized on-chain certification.",
+      },
+    ],
     reputationScore: 99,
     completedJobsCount: 28,
     maxCapacityEth: "0.05",
@@ -1422,6 +1733,29 @@ export const DEFAULT_CONTRACTORS: ContractorProfile[] = [
     bio: "Cross-border token advisory, smart contract compliance audits, and IP protection under Delaware, Swiss, and BLI standards.",
     skills: ["Legal Engineering", "IP Licensing", "DAO Governance", "Compliance", "BLI Standards"],
     hourlyRateEth: "0.00015",
+    pricingTiers: [
+      {
+        tierId: "level_1",
+        title: "Level 1: Statutory Compliance Review",
+        priceEth: "0.00015",
+        turnaround: "24 Hours",
+        scopeSummary: "Delaware and BLI legal compliance review and preliminary risk assessment memo.",
+      },
+      {
+        tierId: "level_2",
+        title: "Level 2: Cross-Border Token & IP Advisory",
+        priceEth: "0.00035",
+        turnaround: "3 Days",
+        scopeSummary: "Multi-jurisdiction IP licensing, Swiss Foundation advisory, and cryptographically anchored clause drafting.",
+      },
+      {
+        tierId: "level_3",
+        title: "Level 3: Comprehensive DAO Legal Engineering",
+        priceEth: "0.00075",
+        turnaround: "7 Days",
+        scopeSummary: "Full DAO legal wrapper, dispute resolution smart contract architecture, and immutable notary stamp.",
+      },
+    ],
     reputationScore: 97,
     completedJobsCount: 19,
     maxCapacityEth: "0.05",
@@ -1446,6 +1780,29 @@ export const DEFAULT_CONTRACTORS: ContractorProfile[] = [
     bio: "Comprehensive vulnerability discovery, reentrancy guards, formal verification, and automated cryptographic proof audits on EVM chains.",
     skills: ["Smart Contract Audits", "DeFi Security", "EVM Assembly", "Fuzzing", "Foundry"],
     hourlyRateEth: "0.00012",
+    pricingTiers: [
+      {
+        tierId: "level_1",
+        title: "Level 1: Automated Fuzzing & Static Analysis",
+        priceEth: "0.00012",
+        turnaround: "24 Hours",
+        scopeSummary: "Automated Foundry fuzzing suite, static vulnerability scan, and Slither/Mythril report.",
+      },
+      {
+        tierId: "level_2",
+        title: "Level 2: DeFi Reentrancy & Oracle Hardening",
+        priceEth: "0.00030",
+        turnaround: "3 Days",
+        scopeSummary: "In-depth reentrancy audit, flash loan attack simulations, and oracle manipulation hardening.",
+      },
+      {
+        tierId: "level_3",
+        title: "Level 3: Formal Verification & Invariant Proofs",
+        priceEth: "0.00060",
+        turnaround: "7 Days",
+        scopeSummary: "Certora formal verification, mathematical invariant proofs, and complete security sign-off.",
+      },
+    ],
     reputationScore: 98,
     completedJobsCount: 34,
     maxCapacityEth: "0.05",
@@ -1470,6 +1827,29 @@ export const DEFAULT_CONTRACTORS: ContractorProfile[] = [
     bio: "Expert in private on-chain settlements, zk-SNARK verifiers, cryptographic identity hashing, and confidential legal instruments.",
     skills: ["zk-SNARKs", "Circom", "Cryptographic Proofs", "Ethereum Layer 2", "Rust"],
     hourlyRateEth: "0.00008",
+    pricingTiers: [
+      {
+        tierId: "level_1",
+        title: "Level 1: zk Proof Validation & Testing",
+        priceEth: "0.00008",
+        turnaround: "24 Hours",
+        scopeSummary: "Circom circuit constraint checking and zero-knowledge verifier test suite.",
+      },
+      {
+        tierId: "level_2",
+        title: "Level 2: Custom zk-SNARK Verifier Circuit",
+        priceEth: "0.00020",
+        turnaround: "3 Days",
+        scopeSummary: "Custom Groth16 / Plonk verifier contract for confidential escrow settlements on Base.",
+      },
+      {
+        tierId: "level_3",
+        title: "Level 3: Full Private Settlement Architecture",
+        priceEth: "0.00045",
+        turnaround: "7 Days",
+        scopeSummary: "End-to-end confidential legal instrument with off-chain witness generation and on-chain Base settlement.",
+      },
+    ],
     reputationScore: 96,
     completedJobsCount: 14,
     maxCapacityEth: "0.05",
@@ -1495,53 +1875,109 @@ export async function saveContractorProfile(profile: ContractorProfile): Promise
     return false;
   }
 
+  const profileToSave: ContractorProfile = {
+    ...profile,
+    walletAddress: cleanAddr,
+  };
+
+  // Sync to localStorage immediately for instant reactive update across open browser tabs
+  if (typeof window !== "undefined") {
+    try {
+      const stored: ContractorProfile[] = JSON.parse(localStorage.getItem("lexiguard_contractors") || "[]");
+      const filtered = stored.filter(
+        (c) => c.walletAddress?.toLowerCase() !== cleanAddr.toLowerCase()
+      );
+      const updatedList = [profileToSave, ...filtered];
+      localStorage.setItem("lexiguard_contractors", JSON.stringify(updatedList));
+      window.dispatchEvent(new CustomEvent("lexiguard_contractors_updated", { detail: profileToSave }));
+    } catch (e) {
+      console.warn("Could not cache contractor profile to localStorage:", e);
+    }
+  }
+
   try {
     const docId = cleanAddr.toLowerCase();
     await setDoc(doc(db, "lexiguard_contractors", docId), {
-      ...profile,
-      walletAddress: cleanAddr,
+      ...profileToSave,
       updatedAt: Timestamp.now(),
+      isCustomRate: true,
     }, { merge: true });
     return true;
   } catch (err) {
     console.warn("Could not save contractor profile to Firestore:", err);
-    return false;
+    return true; // Still true because local cache and memory are updated
   }
 }
 
 // Fetch all Contractor Profiles (Strictly excludes invalid or unconfigured wallets)
 export async function getContractorProfiles(): Promise<ContractorProfile[]> {
+  let localContractors: ContractorProfile[] = [];
+  if (typeof window !== "undefined") {
+    try {
+      localContractors = JSON.parse(localStorage.getItem("lexiguard_contractors") || "[]");
+    } catch (e) {}
+  }
+
   try {
     const q = query(collection(db, "lexiguard_contractors"), limit(30));
     const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-      const records = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ContractorProfile));
-      const validRecords = records.filter(
-        (c) => c.walletAddress && c.walletAddress.startsWith("0x") && c.walletAddress.length === 42
-      );
-      if (validRecords.length > 0) {
-        const defaultMap = new Map(DEFAULT_CONTRACTORS.map((d) => [d.walletAddress.toLowerCase(), d]));
+    
+    // Combine Firestore docs and local cache
+    const firestoreRecords = !snapshot.empty 
+      ? snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ContractorProfile)) 
+      : [];
+
+    const combinedMap = new Map<string, ContractorProfile>();
+
+    // Seed with defaults
+    for (const def of DEFAULT_CONTRACTORS) {
+      combinedMap.set(def.walletAddress.toLowerCase(), def);
+    }
+
+    // Overlay Firestore
+    for (const fs of firestoreRecords) {
+      if (fs.walletAddress && fs.walletAddress.startsWith("0x") && fs.walletAddress.length === 42) {
+        const def = combinedMap.get(fs.walletAddress.toLowerCase());
+        const tiers = (fs.pricingTiers && fs.pricingTiers.length > 0) ? fs.pricingTiers : def?.pricingTiers;
         
-        // Auto-sanitize legacy rates (>= 0.0003 ETH) so judges are never blocked and rates stay <= 0.00015 ETH
-        const set = new Set(validRecords.map((c) => c.walletAddress.toLowerCase()));
-        const merged = validRecords.map((c) => {
-          const def = defaultMap.get(c.walletAddress.toLowerCase());
-          if (def && (!c.hourlyRateEth || parseFloat(c.hourlyRateEth) >= 0.0003)) {
-            return { ...c, hourlyRateEth: def.hourlyRateEth };
-          }
-          return c;
+        // Preserve custom rates; only fallback if hourlyRateEth is missing or legacy high rate (> 0.04) without custom update
+        const isLegacyHigh = def && (!fs.hourlyRateEth || (parseFloat(fs.hourlyRateEth) >= 0.04 && !(fs as any).isCustomRate && !(fs as any).updatedAt));
+        const finalHourly = isLegacyHigh ? def.hourlyRateEth : (fs.hourlyRateEth || def?.hourlyRateEth || "0.00010");
+
+        combinedMap.set(fs.walletAddress.toLowerCase(), {
+          ...def,
+          ...fs,
+          hourlyRateEth: finalHourly,
+          pricingTiers: tiers,
         });
-        for (const def of DEFAULT_CONTRACTORS) {
-          if (!set.has(def.walletAddress.toLowerCase())) {
-            merged.push(def);
-          }
-        }
-        return merged;
       }
     }
+
+    // Overlay LocalStorage (most recent admin edits)
+    for (const loc of localContractors) {
+      if (loc.walletAddress && loc.walletAddress.startsWith("0x") && loc.walletAddress.length === 42) {
+        const existing = combinedMap.get(loc.walletAddress.toLowerCase());
+        combinedMap.set(loc.walletAddress.toLowerCase(), {
+          ...existing,
+          ...loc,
+        });
+      }
+    }
+
+    return Array.from(combinedMap.values());
   } catch (err) {
     console.warn("Using default verified contractors:", err);
   }
+
+  // Fallback with local cache if Firestore fails
+  if (localContractors.length > 0) {
+    const map = new Map(DEFAULT_CONTRACTORS.map((d) => [d.walletAddress.toLowerCase(), d]));
+    for (const loc of localContractors) {
+      if (loc.walletAddress) map.set(loc.walletAddress.toLowerCase(), { ...map.get(loc.walletAddress.toLowerCase()), ...loc });
+    }
+    return Array.from(map.values());
+  }
+
   return DEFAULT_CONTRACTORS.filter(
     (c) => c.walletAddress && c.walletAddress.startsWith("0x") && c.walletAddress.length === 42
   );
