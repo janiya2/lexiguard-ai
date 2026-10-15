@@ -277,7 +277,7 @@ export default function VaultPage() {
   });
 
   return (
-    <div className="relative flex flex-col min-h-screen bg-[#030712] text-slate-100 overflow-x-hidden w-full max-w-full">
+    <div className="relative flex flex-col min-h-screen bg-[#030712] text-slate-100 overflow-x-clip w-full max-w-full">
       {/* Dynamic Cyber Vault Background Asset */}
       <div
         className="fixed inset-0 bg-cover bg-center opacity-10 pointer-events-none mix-blend-screen"
@@ -287,7 +287,7 @@ export default function VaultPage() {
 
       <Navbar />
 
-      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 space-y-8 sm:space-y-12 min-w-0 overflow-x-hidden">
+      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 space-y-8 sm:space-y-12 min-w-0 overflow-x-clip">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto space-y-3 px-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-semibold">

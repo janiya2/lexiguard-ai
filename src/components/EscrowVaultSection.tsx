@@ -978,11 +978,11 @@ export default function EscrowVaultSection() {
         {/* Main Grid: Client Deposit Form + Active Escrows Ledger */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 min-w-0 items-start">
           
-          {/* CLIENT DEPOSIT FORM WITH ATTACHED PROPOSAL / TASK SPEC (STICKY ON DESKTOP) */}
+          {/* CLIENT DEPOSIT FORM WITH ATTACHED PROPOSAL / TASK SPEC (FIXED ON DESKTOP) */}
           <div className={`space-y-4 min-w-0 transition-all duration-300 ${
             escrowLayoutMode === "full"
               ? "hidden"
-              : "lg:col-span-5 lg:sticky lg:top-24 self-start max-h-[calc(100vh-7rem)] overflow-y-auto pr-1"
+              : "lg:col-span-5 lg:sticky lg:top-24 self-start"
           }`}>
             <div className="rounded-3xl bg-slate-900/80 border border-cyan-500/20 p-3.5 sm:p-7 backdrop-blur-xl shadow-2xl space-y-5 overflow-hidden">
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
@@ -1721,8 +1721,12 @@ export default function EscrowVaultSection() {
               ))}
             </div>
 
-            {/* Escrow Cards List with Empty State & Role Permissions */}
-            <div className="space-y-4 min-w-0">
+            {/* Escrow Cards List with Independent Scroll Container matching Client Form Height */}
+            <div className={`space-y-4 min-w-0 ${
+              escrowLayoutMode === "full"
+                ? ""
+                : "lg:max-h-[820px] lg:overflow-y-auto lg:pr-2.5 custom-scrollbar"
+            }`}>
               {filteredEscrows.length === 0 ? (
                 <div className="text-center py-12 px-4 rounded-3xl bg-slate-900/60 border border-white/5 space-y-3">
                   <Shield className="w-10 h-10 text-cyan-400/50 mx-auto" />
