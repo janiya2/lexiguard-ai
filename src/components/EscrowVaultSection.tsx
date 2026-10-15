@@ -40,6 +40,8 @@ import {
   Wallet,
   Printer,
   Share2,
+  Columns,
+  Maximize2,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useWeb3, LEXIGUARD_CONTRACT_ADDRESS } from "@/context/Web3Context";
@@ -144,6 +146,9 @@ export default function EscrowVaultSection() {
 
   // Professional Order Confirmation & Congratulations Modal State
   const [successOrderModal, setSuccessOrderModal] = useState<any | null>(null);
+
+  // Layout View Mode: "split" (Side-by-side with sticky form) or "full" (Full-width ledger focus)
+  const [escrowLayoutMode, setEscrowLayoutMode] = useState<"split" | "full">("split");
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -890,14 +895,20 @@ export default function EscrowVaultSection() {
       return getSec(b) - getSec(a);
     });
 
+  const totalEscrowedEth = escrows.reduce((sum, item) => sum + (parseFloat(item.amountEth || "0") || 0), 0);
+  const activeEscrowsCount = escrows.filter((e) => e.status === "LOCKED" || e.status === "SUBMITTED").length;
+  const settledEscrowsCount = escrows.filter((e) => e.status === "RELEASED").length;
+
   return (
-    <section className="relative rounded-3xl overflow-hidden border border-cyan-500/20 shadow-2xl p-3.5 sm:p-7 lg:p-9 space-y-6 sm:space-y-8 bg-[#040816]/90 backdrop-blur-2xl w-full max-w-full min-w-0">
+    <section className="relative rounded-3xl border border-cyan-500/20 shadow-2xl p-3.5 sm:p-7 lg:p-9 space-y-6 sm:space-y-8 bg-[#040816]/90 backdrop-blur-2xl w-full max-w-full min-w-0">
       {/* Dynamic Cyber Vault Background Image with Blend Overlay */}
-      <div
-        className="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none mix-blend-screen"
-        style={{ backgroundImage: `url('/images/escrow_vault_bg.jpg')` }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-[#040816]/95 via-[#060c23]/90 to-[#040816]/95 pointer-events-none" />
+      <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-screen"
+          style={{ backgroundImage: `url('/images/escrow_vault_bg.jpg')` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#040816]/95 via-[#060c23]/90 to-[#040816]/95" />
+      </div>
 
       {/* Relative Content Container */}
       <div className="relative z-10 space-y-6 sm:space-y-8 min-w-0">
@@ -917,6 +928,36 @@ export default function EscrowVaultSection() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Layout Toggle: Split View vs Full Width Ledger */}
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs shadow-sm">
+              <button
+                type="button"
+                onClick={() => setEscrowLayoutMode("split")}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  escrowLayoutMode === "split"
+                    ? "bg-cyan-500 text-slate-950 shadow-md font-black"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Split Side-by-Side: Sticky Order Form on Left + Ledger on Right"
+              >
+                <Columns className="w-3 h-3" />
+                <span>Split View</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEscrowLayoutMode("full")}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                  escrowLayoutMode === "full"
+                    ? "bg-cyan-500 text-slate-950 shadow-md font-black"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Full-Width Ledger: Escrow orders expand across full width to eliminate side space"
+              >
+                <Maximize2 className="w-3 h-3" />
+                <span>Full Ledger ({filteredEscrows.length})</span>
+              </button>
+            </div>
+
             <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs text-slate-300 shadow-sm">
               <span className="text-slate-500">Contract:</span>
               <span className="font-mono text-cyan-300 font-bold">
@@ -935,11 +976,16 @@ export default function EscrowVaultSection() {
         </div>
 
         {/* Main Grid: Client Deposit Form + Active Escrows Ledger */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 min-w-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 min-w-0 items-start">
           
-          {/* CLIENT DEPOSIT FORM WITH ATTACHED PROPOSAL / TASK SPEC */}
-          <div className="lg:col-span-5 min-w-0 rounded-3xl bg-slate-900/80 border border-cyan-500/20 p-3.5 sm:p-7 backdrop-blur-xl shadow-2xl space-y-5 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          {/* CLIENT DEPOSIT FORM WITH ATTACHED PROPOSAL / TASK SPEC (STICKY ON DESKTOP) */}
+          <div className={`space-y-4 min-w-0 transition-all duration-300 ${
+            escrowLayoutMode === "full"
+              ? "hidden"
+              : "lg:col-span-5 lg:sticky lg:top-24 self-start max-h-[calc(100vh-7rem)] overflow-y-auto pr-1"
+          }`}>
+            <div className="rounded-3xl bg-slate-900/80 border border-cyan-500/20 p-3.5 sm:p-7 backdrop-blur-xl shadow-2xl space-y-5 overflow-hidden">
+              <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <div className="flex items-center gap-2">
                 <Coins className="w-4 h-4 text-cyan-400" />
                 <h3 className="font-bold text-white text-base">
@@ -1408,11 +1454,72 @@ export default function EscrowVaultSection() {
             </form>
           </div>
 
-          {/* ACTIVE ESCROWS LEDGER WITH STRICT ROLE ACTIONS & PRIVACY */}
-          <div id="escrow-orders-ledger" className="lg:col-span-7 min-w-0 space-y-4">
-            
-            {/* HACKATHON JUDGE TESTING / MULTI-ROLE SIMULATOR BAR */}
-            <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/60 to-cyan-950/40 border border-cyan-500/30 flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-xs shadow-lg">
+          {/* ESCROW STATS & QUICK ACTIONS WIDGET */}
+          <div className="rounded-2xl bg-slate-900/90 border border-white/10 p-4 space-y-3 text-xs shadow-xl backdrop-blur-md">
+            <div className="flex items-center justify-between text-slate-400">
+              <span className="font-bold flex items-center gap-1.5 text-cyan-300 text-[11px]">
+                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Vault Portfolio Overview</span>
+              </span>
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-bold">
+                Base Sepolia
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="p-2 rounded-xl bg-slate-950/70 border border-white/5">
+                <div className="text-[10px] text-slate-400">Total Value</div>
+                <div className="text-xs font-mono font-bold text-cyan-300 truncate">{totalEscrowedEth.toFixed(4)} ETH</div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-950/70 border border-white/5">
+                <div className="text-[10px] text-slate-400">Active Locked</div>
+                <div className="text-xs font-mono font-bold text-amber-300">{activeEscrowsCount} Orders</div>
+              </div>
+              <div className="p-2 rounded-xl bg-slate-950/70 border border-white/5">
+                <div className="text-[10px] text-slate-400">Settled</div>
+                <div className="text-xs font-mono font-bold text-emerald-400">{settledEscrowsCount} Released</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEscrowLayoutMode("full")}
+              className="w-full py-2 px-3 rounded-xl font-bold text-[11px] bg-gradient-to-r from-purple-500/15 to-cyan-500/15 hover:from-purple-500/25 hover:to-cyan-500/25 text-slate-200 hover:text-white transition-all border border-white/10 flex items-center justify-center gap-1.5 cursor-pointer"
+              title="Expand escrow orders across full screen width to eliminate left space"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Expand Orders to Full-Width View →</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ACTIVE ESCROWS LEDGER WITH STRICT ROLE ACTIONS & PRIVACY */}
+        <div id="escrow-orders-ledger" className={`min-w-0 space-y-4 transition-all duration-300 ${
+          escrowLayoutMode === "full" ? "lg:col-span-12" : "lg:col-span-7"
+        }`}>
+          {/* FULL-WIDTH VIEW BANNER WITH QUICK BACK TO SPLIT VIEW */}
+          {escrowLayoutMode === "full" && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-slate-900/80 to-purple-950/60 border border-cyan-500/30 text-xs shadow-xl animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-300">
+                  <Maximize2 className="w-4 h-4" />
+                </span>
+                <div>
+                  <h4 className="font-bold text-white text-xs">Full-Width Ledger Active</h4>
+                  <p className="text-[11px] text-slate-300">Escrow orders expanded across full screen width for effortless review.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEscrowLayoutMode("split")}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl font-bold text-xs bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 shadow-md transition-all cursor-pointer shrink-0"
+              >
+                <Columns className="w-3.5 h-3.5" />
+                <span>+ New Milestone / Split View</span>
+              </button>
+            </div>
+          )}
+
+          {/* HACKATHON JUDGE TESTING / MULTI-ROLE SIMULATOR BAR */}
+          <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-slate-900/60 to-cyan-950/40 border border-cyan-500/30 flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-xs shadow-lg">
               <div className="flex items-center gap-2">
                 <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
                 <span className="font-bold text-white flex items-center gap-1.5 text-[11px]">
