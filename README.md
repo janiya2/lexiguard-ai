@@ -9,7 +9,7 @@
 > **Built by:** InnoXpert Studio (Janitha Dilshan — Lead Solutions Architect)  
 > **Category:** Legal Technology, RegTech, Compliance, Web3 & AI Convergence  
 > **Verified Smart Contract:** `0x74b127D9b5F08b598C4ffc8b8A40a454868FE300` (Base Sepolia EVM)  
-> **Live Demo:** [https://lexiguard-ai.vercel.app](https://lexiguard-ai.vercel.app)  
+> **Live Demo:** [https://lexiguard-ai-three.vercel.app](https://lexiguard-ai-three.vercel.app)  
 
 ---
 
